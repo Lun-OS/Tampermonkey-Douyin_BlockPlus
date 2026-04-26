@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         抖音一键拉黑
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/Lun-OS/Tampermonkey-Douyin_BlockPlus
 // @version      3.0
 // @description  在抖音视频页面、评论区、视频详情页、直播间添加一键拉黑按钮
-// @author       You
+// @author       Lun.
 // @match        https://www.douyin.com/?recommend=1
 // @match        https://www.douyin.com/
 // @match        https://www.douyin.com/video/*
@@ -11,6 +11,7 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        unsafeWindow
+// @license      MIT
 // @run-at       document-end
 // ==/UserScript==
 
