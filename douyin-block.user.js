@@ -1067,7 +1067,7 @@
             return false;
         }
 
-        const avatarContainer = interactionArea.querySelector('.B0JKdzQ8.KsoclCZj');
+        const avatarContainer = interactionArea.querySelector('.B0JKdzQ8');
         if (!avatarContainer) {
             return false;
         }
