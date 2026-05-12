@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         抖音一键拉黑
 // @namespace    https://github.com/Lun-OS/Tampermonkey-Douyin_BlockPlus
-// @version      4.4
-// @description  抖音拉黑从未如此丝滑——0.01秒接口直封，无需模拟点击，无需跳转菜单。全场景（推荐/详情/评论...）按钮自动就位，点一下瞬间屏蔽/解除，纯净体验零等待。
+// @version      4.5
+// @description  抖音拉黑从未如此丝滑——0.01秒接口直封，无需模拟点击，无需跳转菜单。全场景（推荐/详情/评论...）按钮自动就位，点一下瞬间屏蔽/解除，纯净体验零等待。【v4.5修复版：修复按钮位置，使其水平排列在头像旁边】
 // @author       Lun.
 // @match        https://www.douyin.com/*
 // @match        https://www.douyin.com/
@@ -20,7 +20,7 @@
 (function() {
     'use strict';
 
-    console.log('[抖音拉黑] v4.4');
+    console.log('[抖音拉黑] v4.5');
 
     // 清理旧版本的设置项
     localStorage.removeItem('douyin-block-comment-shortcut-enabled');
@@ -68,8 +68,8 @@
             backdrop-filter: blur(2px);
         }
         .douyin-block-btn:hover .block-icon {
-            background: rgba(0, 0, 0, 0.35);
-            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(0, 0, 0, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
         }
         .douyin-block-btn .block-icon svg {
             width: 22px;
@@ -79,12 +79,21 @@
         }
         .douyin-block-btn:hover .block-icon svg {
             fill: #fff;
+            filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 16px rgba(255, 255, 255, 0.6));
+            transform: scale(1.1);
         }
         .douyin-block-btn.blocked .block-icon svg path {
-            fill: #ff6666 !important;
+            fill: #ff4444 !important;
         }
         .douyin-block-btn.blocked:hover .block-icon svg path {
-            fill: #ff8080 !important;
+            fill: #ff6666 !important;
+        }
+        .douyin-block-btn.blocked {
+            background: rgba(255, 68, 68, 0.15) !important;
+            border-radius: 50%;
+        }
+        .douyin-block-btn.blocked:hover {
+            background: rgba(255, 68, 68, 0.25) !important;
         }
         .douyin-block-btn .block-tooltip-wrapper {
             position: absolute;
@@ -133,7 +142,7 @@
             text-align: center;
         }
         .douyin-comment-block-btn {
-            display: flex;
+            display: inline-flex !important;
             align-items: center;
             justify-content: center;
             cursor: pointer;
@@ -142,9 +151,12 @@
             background: transparent;
             transition: all 0.2s;
             position: relative;
+            vertical-align: middle;
+            margin-left: 4px;
+            flex-shrink: 0;
         }
         .douyin-comment-block-btn:hover {
-            background: rgba(0, 0, 0, 0.05);
+            background: transparent;
         }
         .douyin-comment-block-btn .block-icon {
             width: 20px;
@@ -157,16 +169,25 @@
             width: 16px;
             height: 16px;
             fill: #61666d;
-            transition: fill 0.2s;
+            transition: all 0.2s ease;
         }
         .douyin-comment-block-btn:hover .block-icon svg {
-            fill: #8a9199;
+            fill: #fff;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.9)) drop-shadow(0 0 12px rgba(255, 255, 255, 0.6));
+            transform: scale(1.15);
         }
         .douyin-comment-block-btn.blocked .block-icon svg path {
-            fill: #ff6666 !important;
+            fill: #ff4444 !important;
         }
         .douyin-comment-block-btn.blocked:hover .block-icon svg path {
-            fill: #ff8080 !important;
+            fill: #ff6666 !important;
+        }
+        .douyin-comment-block-btn.blocked {
+            background: rgba(255, 68, 68, 0.1) !important;
+            border-radius: 4px;
+        }
+        .douyin-comment-block-btn.blocked:hover {
+            background: rgba(255, 68, 68, 0.2) !important;
         }
         .live-block-btn:hover {
             background: rgba(0, 0, 0, 0.1);
@@ -306,7 +327,7 @@
     // 从按钮所在容器获取视频作者信息 - 增强版（360浏览器兼容性优化）
     function getVideoAuthorInfoFromContainer(container) {
         console.log('[抖音一键拉黑] 开始从容器获取视频作者信息...');
-
+        
         // 第一层：标准用户链接选择器
         let authorLink = container.querySelector('a[href*="/user/"]');
         let foundMethod = '标准选择器';
@@ -317,7 +338,7 @@
             if (liveAvatarWrapper) {
                 authorLink = liveAvatarWrapper.querySelector('a[href*="/user/"]');
                 if (authorLink) foundMethod = '直播头像框';
-
+                
                 // 如果还是没找到，尝试查找任何包含 user 链接的 a 标签
                 if (!authorLink) {
                     const allLinks = liveAvatarWrapper.querySelectorAll('a');
@@ -341,7 +362,7 @@
                 '[class*="avatar"] img',
                 '.semi-avatar img'
             ];
-
+            
             for (const selector of avatarSelectors) {
                 const avatarImg = container.querySelector(selector);
                 if (avatarImg) {
@@ -382,7 +403,7 @@
                 console.log('[抖音一键拉黑] 从容器data属性获取到secUid:', dataSecUid);
                 return { secUid: dataSecUid };
             }
-
+            
             // 查找子元素中的data属性
             const elementsWithData = container.querySelectorAll('[data-sec-uid], [data-user-sec-uid]');
             for (const el of elementsWithData) {
@@ -398,16 +419,16 @@
         if (authorLink) {
             const href = authorLink.getAttribute('href') || '';
             console.log('[抖音一键拉黑] 找到用户链接，方式:', foundMethod, 'href:', href);
-
+            
             // 尝试多种方式提取secUid
             let secUid = null;
-
+            
             // 方式1：标准匹配
             const match = href.match(/\/user\/([^?\s]+)/);
             if (match) {
                 secUid = match[1];
             }
-
+            
             // 方式2：直接匹配MS4wLj
             if (!secUid) {
                 const msMatch = href.match(/(MS4wLj[A-Za-z0-9_-]+)/);
@@ -415,7 +436,7 @@
                     secUid = msMatch[1];
                 }
             }
-
+            
             if (secUid) {
                 const result = { secUid: secUid };
 
@@ -430,7 +451,7 @@
                 if (userIdAttr) {
                     result.userId = userIdAttr.getAttribute('data-user-id');
                 }
-
+                
                 // 从当前元素获取
                 if (!result.userId) {
                     result.userId = container.getAttribute('data-user-id');
@@ -463,7 +484,7 @@
     // 从视频详情页面获取作者信息
     function getAuthorInfoFromVideoDetailPage() {
         const win = unsafeWindow || window;
-
+        
         if (win.__SSR_DATA__ && win.__SSR_DATA__.user) {
             const user = win.__SSR_DATA__.user;
             if (user.sec_uid) {
@@ -473,7 +494,7 @@
                 };
             }
         }
-
+        
         const userLinks = document.querySelectorAll('a[href*="/user/MS4wLj"]');
         if (userLinks.length > 0) {
             const href = userLinks[0].getAttribute('href');
@@ -482,7 +503,7 @@
                 return { secUid: match[1] };
             }
         }
-
+        
         const authorElements = document.querySelectorAll('[data-sec-uid], [data-author-sec-uid]');
         for (const el of authorElements) {
             const secUid = el.getAttribute('data-sec-uid') || el.getAttribute('data-author-sec-uid');
@@ -493,7 +514,7 @@
                 };
             }
         }
-
+        
         return null;
     }
 
@@ -647,10 +668,10 @@
         // 查找直播间播放器容器
         const playerContainer = document.querySelector('.douyin-player-controls');
         if (!playerContainer) return null;
-
+        
         // 尝试从页面数据获取主播信息
         const win = unsafeWindow || window;
-
+        
         // 尝试从 __INITIAL_STATE__ 获取
         if (win.__INITIAL_STATE__ && win.__INITIAL_STATE__.room && win.__INITIAL_STATE__.room.owner) {
             const owner = win.__INITIAL_STATE__.room.owner;
@@ -659,7 +680,7 @@
                 userId: owner.uid || owner.user_id
             };
         }
-
+        
         // 尝试从 data-* 属性获取
         const playerEl = document.querySelector('[data-room-id]') || document.querySelector('[data-anchor-sec-uid]');
         if (playerEl) {
@@ -668,7 +689,7 @@
                 userId: playerEl.dataset.anchorUid || playerEl.dataset.uid
             };
         }
-
+        
         return null;
     }
 
@@ -1022,9 +1043,9 @@
         return new Promise((resolve, reject) => {
             const win = unsafeWindow || window;
             const xhr = new win.XMLHttpRequest();
-
+            
             console.log('[抖音一键拉黑] 尝试使用页面 XHR');
-
+            
             // 构建表单数据（按照接口.txt中的格式）
             const formData = new win.FormData();
             formData.append('block_type', options.blockType || '0');
@@ -1033,17 +1054,17 @@
             if (options.userId) {
                 formData.append('user_id', options.userId);
             }
-
+            
             xhr.open('POST', url, true);
             xhr.withCredentials = true;
-
+            
             // 设置请求头
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
             xhr.setRequestHeader('Accept', 'application/json, text/plain, */*');
             xhr.setRequestHeader('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
             xhr.setRequestHeader('Origin', 'https://www.douyin.com');
             xhr.setRequestHeader('Referer', 'https://www.douyin.com/');
-
+            
             xhr.onload = function() {
                 console.log('[抖音一键拉黑] XHR 响应状态:', xhr.status);
                 resolve({
@@ -1051,12 +1072,12 @@
                     responseText: xhr.responseText
                 });
             };
-
+            
             xhr.onerror = function() {
                 console.log('[抖音一键拉黑] XHR 请求失败');
                 reject(new Error('XHR request failed'));
             };
-
+            
             // 将 FormData 转换为 URL 编码字符串
             // 注意：根据接口.txt，block_type=1 表示拉黑，block_type=0 表示解除拉黑
             const params = new URLSearchParams();
@@ -1069,7 +1090,7 @@
             if (options.userId) {
                 params.append('user_id', options.userId);
             }
-
+            
             console.log('[抖音一键拉黑] XHR 请求体:', params.toString());
             xhr.send(params.toString());
         });
@@ -1080,21 +1101,21 @@
         return new Promise((resolve) => {
             try {
                 const win = unsafeWindow || window;
-
+                
                 // 尝试通过 webpack 获取抖音的请求模块
                 if (win.webpackChunkdouyin_web) {
                     console.log('[抖音一键拉黑] 尝试通过 webpack 获取请求模块');
-
+                    
                     // 尝试获取模块
                     let requestModule = null;
-
+                    
                     // 遍历 webpack chunk 寻找请求相关的模块
                     win.webpackChunkdouyin_web.forEach((chunk) => {
                         chunk[1].forEach((module, id) => {
                             try {
                                 const moduleStr = module.toString();
                                 // 查找包含请求逻辑的模块
-                                if (moduleStr.includes('/aweme/v1/') ||
+                                if (moduleStr.includes('/aweme/v1/') || 
                                     moduleStr.includes('user/block') ||
                                     moduleStr.includes('axios') ||
                                     moduleStr.includes('fetch')) {
@@ -1104,7 +1125,7 @@
                         });
                     });
                 }
-
+                
                 resolve({ success: false });
             } catch (error) {
                 console.error('[抖音一键拉黑] 使用抖音模块失败:', error);
@@ -1118,7 +1139,7 @@
         return new Promise((resolve) => {
             try {
                 const win = unsafeWindow || window;
-
+                
                 // 查找页面中的请求模块
                 if (win.webpackChunkdouyin_web) {
                     console.log('[抖音一键拉黑] 找到 webpackChunkdouyin_web');
@@ -1126,11 +1147,11 @@
 
                 // 尝试调用页面的签名函数
                 let signedUrl = null;
-
+                
                 // 方法1: 尝试调用 _byted_acrawler.signUrl
                 if (win._byted_acrawler) {
                     console.log('[抖音一键拉黑] 找到 _byted_acrawler');
-
+                    
                     if (typeof win._byted_acrawler.signUrl === 'function') {
                         try {
                             const baseUrl = `/aweme/v1/web/user/block/?sec_user_id=${secUid}&block_type=${blockType}&source=0`;
@@ -1140,7 +1161,7 @@
                             console.log('[抖音一键拉黑] signUrl 调用失败:', e);
                         }
                     }
-
+                    
                     // 尝试其他签名方法
                     if (!signedUrl && typeof win._byted_acrawler.sign === 'function') {
                         try {
@@ -1213,7 +1234,7 @@
 
             // 首先尝试使用页面内部方法
             const pageMethodResult = await blockUserWithPageMethod(secUid, blockType);
-
+            
             // 获取签名参数
             const signParams = getSignParams();
             console.log('[抖音拉黑] 签名参数');
@@ -1222,7 +1243,7 @@
             // 注意：实际的拉黑请求使用的是 www-hj.douyin.com 域名
             let url = 'https://www-hj.douyin.com/aweme/v1/web/user/block/?';
             const urlParams = new URLSearchParams();
-
+            
             // 从 cookie 获取必要的参数
             const cookies = document.cookie.split(';');
             let webid = '', uifid = '', fp = '';
@@ -1235,27 +1256,27 @@
                 if (name === 'UIFID') uifid = value;
                 if (name === 's_v_web_id') { webid = value; fp = value; }
             }
-
+            
             // 添加设备参数（动态获取）
             const deviceParams = getDeviceParams();
             for (const [key, value] of Object.entries(deviceParams)) {
                 urlParams.append(key, value);
             }
-
+            
             // 添加用户相关参数
             if (webid) urlParams.append('webid', webid);
             if (uifid) urlParams.append('uifid', uifid);
-
+            
             // 添加 msToken
             const msToken = signParams.msToken || generateMsToken();
             urlParams.append('msToken', msToken);
-
+            
             // 添加指纹参数
             if (fp) {
                 urlParams.append('verifyFp', fp);
                 urlParams.append('fp', fp);
             }
-
+            
             // 注意：业务参数（sec_user_id, block_type, source, user_id）会在 Form Data 中发送
             // 不再添加到 URL 参数中
 
@@ -1283,7 +1304,7 @@
                         isUnblock: isUnblock
                     });
                     console.log('[抖音一键拉黑] 页面 XHR 结果:', xhrResult);
-
+                    
                     if (xhrResult.status !== 403) {
                         handleResponse(xhrResult.responseText, isUnblock, resolve);
                         return;
@@ -1314,13 +1335,13 @@
                     })
                     .catch(error => {
                         console.log('[抖音一键拉黑] fetch 失败，使用 GM_xmlhttpRequest:', error);
-
+                        
                         // 方法3: 使用 GM_xmlhttpRequest 作为备选
                         // 构建请求体
                         const actualBlockType = isUnblock ? 0 : 1;
                         const gmData = `block_type=${actualBlockType}&sec_user_id=${encodeURIComponent(secUid)}&source=0${signParams.userId ? '&user_id=' + signParams.userId : ''}`;
                         console.log('[抖音一键拉黑] GM 请求体:', gmData);
-
+                        
                         GM_xmlhttpRequest({
                             method: 'POST',
                             url: url,
@@ -1367,7 +1388,7 @@
     function handleResponse(responseText, isUnblock, resolve) {
         if (!responseText) {
             showToast('服务器返回空响应');
-            resolve({ success: false, error: 'Empty response' });
+            resolve({ success: false, isBlocked: undefined, error: 'Empty response' });
             return;
         }
 
@@ -1387,7 +1408,7 @@
                         resolve({ success: true, isBlocked: false });
                     } else {
                         showToast('解除拉黑失败');
-                        resolve({ success: false, error: '解除拉黑失败' });
+                        resolve({ success: false, isBlocked: true, error: '解除拉黑失败' });
                     }
                 } else {
                     // 拉黑操作
@@ -1396,18 +1417,19 @@
                         resolve({ success: true, isBlocked: true });
                     } else {
                         showToast('拉黑失败');
-                        resolve({ success: false, error: '拉黑失败' });
+                        resolve({ success: false, isBlocked: false, error: '拉黑失败' });
                     }
                 }
             } else {
                 const errorMsg = data.status_msg || '操作失败';
                 showToast(errorMsg);
-                resolve({ success: false, error: errorMsg });
+                // 根据操作类型返回预期的isBlocked状态
+                resolve({ success: false, isBlocked: isUnblock ? undefined : undefined, error: errorMsg });
             }
         } catch (e) {
             console.error('[抖音一键拉黑] 解析响应失败:', e);
             showToast('操作失败，请重试');
-            resolve({ success: false, error: '解析失败' });
+            resolve({ success: false, isBlocked: undefined, error: '解析失败' });
         }
     }
 
@@ -1443,7 +1465,7 @@
         btn.addEventListener('mouseleave', preventEventBubbling, true);
         btn.addEventListener('mouseover', preventEventBubbling, true);
         btn.addEventListener('mouseout', preventEventBubbling, true);
-
+        
         // 额外阻止 pointer 事件
         btn.addEventListener('pointerenter', preventEventBubbling, true);
         btn.addEventListener('pointerleave', preventEventBubbling, true);
@@ -1463,21 +1485,30 @@
 
             btn.style.pointerEvents = 'none';
             const isCurrentlyBlocked = btn.dataset.blocked === 'true';
+            console.log('[抖音一键拉黑] 当前拉黑状态:', isCurrentlyBlocked, '准备执行:', isCurrentlyBlocked ? '解除拉黑' : '拉黑');
+            
             const result = await blockUser(authorInfo.secUid, isCurrentlyBlocked);
+            console.log('[抖音一键拉黑] 拉黑操作结果:', result);
 
-            if (result.success) {
+            if (result && result.success) {
                 const tooltipText = btn.querySelector('.block-tooltip-text');
-                if (result.isBlocked) {
+                console.log('[抖音一键拉黑] 操作成功，新的拉黑状态:', result.isBlocked);
+                
+                if (result.isBlocked === true) {
                     btn.dataset.blocked = 'true';
                     btn.classList.add('blocked');
                     if (tooltipText) tooltipText.textContent = '已拉黑';
                     console.log('[抖音一键拉黑] 按钮状态已更新为: 已拉黑');
-                } else {
+                } else if (result.isBlocked === false) {
                     btn.dataset.blocked = 'false';
                     btn.classList.remove('blocked');
                     if (tooltipText) tooltipText.textContent = '拉黑用户';
                     console.log('[抖音一键拉黑] 按钮状态已更新为: 未拉黑');
+                } else {
+                    console.log('[抖音一键拉黑] 警告: isBlocked值异常:', result.isBlocked);
                 }
+            } else {
+                console.log('[抖音一键拉黑] 操作失败或结果异常:', result);
             }
 
             setTimeout(() => {
@@ -1495,160 +1526,129 @@
         return btn;
     }
 
-    // 为单个互动区域插入按钮 - 增强版（360浏览器兼容性优化）
+    // 为单个互动区域插入按钮 - 重构版（完全依赖 data-e2e 和 DOM 结构）
+    // 核心原则：
+    // 1. 所有选择器仅依赖 data-e2e 属性或结构关系，避免任何 class
+    // 2. 以用户主页链接的存在与否作为开关，没有主页 URL 的卡片不操作
+    // 3. 插入目标：在头像容器之前（即视觉上头像的上方），且与可能存在的 AI 按钮处于同一父容器
+    // 4. 兼容 AI 按钮存在/不存在的两种情况
     function insertButtonForInteractionArea(interactionArea) {
-        if (interactionArea.querySelector('.douyin-block-btn')) {
-            console.log('[抖音一键拉黑] 互动区域已存在拉黑按钮，跳过');
+        // 检查是否已处理过此互动区域
+        if (interactionArea.hasAttribute('data-block-btn-processed')) {
             return false;
         }
 
         console.log('[抖音一键拉黑] 开始为互动区域插入按钮...');
 
-        // 策略1：查找头像容器，在其前面插入（水平排列在头像旁边）
-        let targetContainer = null;
-        let parent = null;
-        let insertBeforeElement = null;
-
-        // 查找头像元素
-        const avatarSelectors = [
-            '.B0JKdzQ8',
-            '.HptCz35d',
-            'img[src*="douyinpic.com"]',
-            '[class*="avatar"]',
-            'a[href*="/user/"]'
-        ];
-
-        for (const selector of avatarSelectors) {
-            const avatarEl = interactionArea.querySelector(selector);
-            if (avatarEl) {
-                // 向上查找到头像的容器
-                let container = avatarEl.parentElement;
-                for (let i = 0; i < 3 && container; i++) {
-                    // 在头像容器前面插入，这样按钮会在头像旁边（水平排列）
-                    if (container.parentElement) {
-                        parent = container.parentElement;
-                        insertBeforeElement = container;
-                        targetContainer = container;
-                        console.log('[抖音一键拉黑] 在头像前找到插入位置，选择器:', selector);
-                        break;
-                    }
-                    container = container.parentElement;
-                }
-                if (targetContainer) break;
-            }
-        }
-
-        // 策略2：如果找不到头像，查找点赞/评论/分享按钮组，在按钮组前面插入
-        if (!targetContainer) {
-            const buttonGroupSelectors = [
-                '[data-e2e="like-button"]',
-                '[data-e2e="comment-button"]',
-                '[data-e2e="share-button"]',
-                '[data-e2e="collect-button"]',
-                '.B6JkCp0k',
-                '.lC6iS6P0',
-                '[class*="action-bar"]',
-                '[class*="button-group"]'
-            ];
-
-            for (const selector of buttonGroupSelectors) {
-                const btnElement = interactionArea.querySelector(selector);
-                if (btnElement) {
-                    let container = btnElement.parentElement;
-                    for (let i = 0; i < 4 && container; i++) {
-                        const childButtons = container.querySelectorAll('button, [role="button"], [data-e2e*="button"], [data-e2e*="-button"]');
-                        if (childButtons.length >= 2 && container.parentElement) {
-                            parent = container.parentElement;
-                            insertBeforeElement = container;
-                            targetContainer = container;
-                            console.log('[抖音一键拉黑] 通过按钮组找到插入位置，选择器:', selector);
-                            break;
-                        }
-                        container = container.parentElement;
-                    }
-                    if (targetContainer) break;
+        // 步骤1：查找头像链接（使用 data-e2e="video-avatar" 或包含 /user/ 的链接）
+        // 优先使用 data-e2e="video-avatar"，如果不存在则查找包含 /user/ 的链接
+        let avatarLink = interactionArea.querySelector('a[data-e2e="video-avatar"]');
+        if (!avatarLink) {
+            // 查找包含用户主页链接的 a 标签
+            const allLinks = interactionArea.querySelectorAll('a[href*="/user/"]');
+            for (const link of allLinks) {
+                const href = link.getAttribute('href') || '';
+                // 确保链接包含有效的用户标识（MS4wLj 是抖音用户 secUid 的特征前缀）
+                if (href.includes('MS4wLj') || href.match(/\/user\/[^\/\s?]+/)) {
+                    avatarLink = link;
+                    break;
                 }
             }
         }
 
-        // 策略3：直接在interactionArea的开头插入（兜底方案）
-        if (!targetContainer) {
-            console.log('[抖音一键拉黑] 未找到合适位置，将按钮添加到互动区域开头');
-            try {
-                const blockBtn = createBlockButton(interactionArea);
-                if (interactionArea.firstElementChild) {
-                    interactionArea.insertBefore(blockBtn, interactionArea.firstElementChild);
-                } else {
-                    interactionArea.appendChild(blockBtn);
-                }
-                console.log('[抖音一键拉黑] 按钮已添加到互动区域开头');
-                return true;
-            } catch (e) {
-                console.log('[抖音一键拉黑] 添加失败:', e.message);
-                return false;
+        // 如果没有找到头像链接或链接中没有用户标识，终止操作
+        if (!avatarLink) {
+            console.log('[抖音一键拉黑] 未找到有效的用户主页链接，跳过此卡片');
+            return false;
+        }
+
+        const href = avatarLink.getAttribute('href') || '';
+        const secUidMatch = href.match(/\/user\/([^?\s]+)/);
+        if (!secUidMatch || !secUidMatch[1]) {
+            console.log('[抖音一键拉黑] 无法从链接中提取用户标识，跳过');
+            return false;
+        }
+
+        console.log('[抖音一键拉黑] 找到用户链接:', href);
+
+        // 步骤2：从头像链接向上遍历，找到关注图标容器（data-e2e="feed-follow-icon" 的祖先）
+        // 该元素即为头像及关注按钮的外层容器
+        let avatarBlock = null;
+        let currentEl = avatarLink;
+        const maxTraverse = 10; // 最大遍历层数，防止无限循环
+
+        for (let i = 0; i < maxTraverse && currentEl; i++) {
+            currentEl = currentEl.parentElement;
+            if (!currentEl) break;
+
+            // 检查当前元素是否包含关注图标
+            const followIcon = currentEl.querySelector('[data-e2e="feed-follow-icon"]');
+            if (followIcon) {
+                avatarBlock = currentEl;
+                console.log('[抖音一键拉黑] 找到头像容器（包含关注图标），层级:', i + 1);
+                break;
             }
         }
 
-        // 验证parent和insertBeforeElement的关系
-        if (!targetContainer || !parent || !insertBeforeElement) {
-            console.log('[抖音一键拉黑] 无法找到合适的插入位置，尝试直接添加到interactionArea末尾');
-            // 兜底方案：直接添加到interactionArea的末尾（确保在头像下方）
-            try {
-                const blockBtn = createBlockButton(interactionArea);
-                interactionArea.appendChild(blockBtn);
-                console.log('[抖音一键拉黑] 直接添加到interactionArea末尾成功');
-                return true;
-            } catch (e) {
-                console.log('[抖音一键拉黑] 直接添加也失败:', e.message);
-                return false;
-            }
+        // 如果没找到包含关注图标的容器，尝试使用头像链接的直接父容器作为备选
+        if (!avatarBlock) {
+            avatarBlock = avatarLink.parentElement;
+            console.log('[抖音一键拉黑] 使用头像链接父容器作为备选');
         }
 
-        // 确保insertBeforeElement是parent的子节点
-        if (insertBeforeElement.parentElement !== parent) {
-            console.log('[抖音一键拉黑] insertBeforeElement不是parent的直接子节点，尝试修正');
-
-            // 尝试找到正确的parent
-            let correctParent = insertBeforeElement.parentElement;
-            if (correctParent) {
-                parent = correctParent;
-            } else {
-                // 尝试使用appendChild作为兜底方案
-                try {
-                    const blockBtn = createBlockButton(interactionArea);
-                    parent.appendChild(blockBtn);
-                    console.log('[抖音一键拉黑] 使用appendChild成功插入按钮');
-                    return true;
-                } catch (e) {
-                    console.log('[抖音一键拉黑] appendChild也失败:', e.message);
-                    return false;
-                }
-            }
+        if (!avatarBlock) {
+            console.log('[抖音一键拉黑] 无法确定头像容器位置');
+            return false;
         }
 
+        // 步骤3：获取头像容器的父节点（与AI按钮同一层级）
+        const avatarContainer = avatarBlock.parentElement;
+        if (!avatarContainer) {
+            console.log('[抖音一键拉黑] 无法找到头像容器父节点');
+            return false;
+        }
+
+        // 获取互动面板（再往外一层，包含AI按钮、头像容器等的父容器）
+        const panel = avatarContainer.parentElement;
+        if (!panel) {
+            console.log('[抖音一键拉黑] 无法找到互动面板');
+            return false;
+        }
+
+        // 进一步验证：检查面板是否包含点赞图标（data-e2e="video-player-digg"）
+        const diggIcon = panel.querySelector('[data-e2e="video-player-digg"]');
+        if (!diggIcon) {
+            // 如果没有找到点赞图标，可能不是正确的面板，但仍继续尝试
+            console.log('[抖音一键拉黑] 警告：面板未包含点赞图标，可能位置不正确');
+        }
+
+        // 步骤4：检查是否已存在按钮（使用自定义属性标记）
+        if (panel.querySelector('[data-custom-inserted="block-btn"]')) {
+            console.log('[抖音一键拉黑] 面板中已存在拉黑按钮，跳过');
+            interactionArea.setAttribute('data-block-btn-processed', 'true');
+            return false;
+        }
+
+        // 步骤5：创建新按钮元素
         const blockBtn = createBlockButton(interactionArea);
+
+        // 为按钮打上自定义属性，避免重复插入
+        blockBtn.setAttribute('data-custom-inserted', 'block-btn');
+
+        // 步骤6：将按钮插入到头像容器之前（与AI按钮同一父容器）
+        // 这样无论 AI 按钮是否存在，新按钮都会在头像上方
+        // - 有 AI 按钮时：新按钮位于 AI 按钮之后、头像容器之前
+        // - 无 AI 按钮时：新按钮成为面板的第一个子元素，依然在头像上方
         try {
-            parent.insertBefore(blockBtn, insertBeforeElement);
-            console.log('[抖音一键拉黑] 互动区域按钮插入成功');
+            panel.insertBefore(blockBtn, avatarContainer);
+            console.log('[抖音一键拉黑] 按钮成功插入到头像容器之前（与AI按钮同层级）');
+
+            // 标记互动区域已处理
+            interactionArea.setAttribute('data-block-btn-processed', 'true');
             return true;
         } catch (e) {
-            console.log('[抖音一键拉黑] insertBefore失败，尝试appendChild:', e.message);
-            try {
-                parent.appendChild(blockBtn);
-                console.log('[抖音一键拉黑] 使用appendChild成功插入按钮');
-                return true;
-            } catch (e2) {
-                console.log('[抖音一键拉黑] appendChild也失败:', e2.message);
-                // 最后尝试添加到interactionArea末尾
-                try {
-                    interactionArea.appendChild(blockBtn);
-                    console.log('[抖音一键拉黑] 最后使用interactionArea.appendChild成功');
-                    return true;
-                } catch (e3) {
-                    console.log('[抖音一键拉黑] 所有插入方式都失败:', e3.message);
-                    return false;
-                }
-            }
+            console.log('[抖音一键拉黑] 插入按钮失败:', e.message);
+            return false;
         }
     }
 
@@ -1670,7 +1670,7 @@
 
         const blockBtn = createCommentBlockButton(commentItem, commentInfo);
         const inserted = insertButtonToCommentItem(commentItem, blockBtn);
-
+        
         if (inserted) {
             console.log('[抖音一键拉黑] 评论区按钮插入成功');
             return true;
@@ -1680,115 +1680,136 @@
         }
     }
 
-    // 将按钮插入到评论项中 - 多种策略
+    // 将按钮插入到评论项中 - 重构版（插入到不喜欢按钮之后）
     function insertButtonToCommentItem(commentItem, blockBtn) {
-        // 策略1：查找"更多"按钮并插入到其前面
-        const moreBtnSelectors = [
-            '.aVT9D1a8',
-            '[data-e2e="comment-more"]',
-            '.comment-more',
-            'button[class*="more"]',
-            'svg[class*="more"]',
-            '.comment-action',
-            '[class*="more"]',
-            '[class*="action"]'
-        ];
+        // 核心目标：将按钮插入到不喜欢按钮之后，在点赞/不喜欢容器内部
+        // 根据 HTML 结构：
+        // <div class="comment-item-stats-container">  <!-- 操作栏 -->
+        //   <div class="I26W2ERo L2ptqwYp">  <!-- 点赞/踩容器 -->
+        //     <p class="soEq5p_Y">...</p>  <!-- 点赞按钮 -->
+        //     <p class="Gb0hN2DA">...</p>  <!-- 不喜欢按钮 -->
+        //     <!-- 按钮应该插入到这里，在不喜欢按钮之后 -->
+        //   </div>
+        //   <div class="y8vae7Xx ztxZDhWP">...</div>  <!-- 分享按钮 -->
+        //   <div class="dJVTtR1P">...</div>  <!-- 更多按钮 -->
+        // </div>
 
-        for (const selector of moreBtnSelectors) {
-            try {
-                const moreBtn = commentItem.querySelector(selector);
-                if (moreBtn && moreBtn.parentElement) {
-                    moreBtn.parentElement.insertBefore(blockBtn, moreBtn);
-                    console.log('[抖音一键拉黑] 按钮插入到更多按钮前，选择器:', selector);
-                    return true;
-                }
-            } catch (e) {}
-        }
+        // 步骤1：查找操作栏容器（comment-item-stats-container）
+        let actionBar = commentItem.querySelector('.comment-item-stats-container');
 
-        // 策略2：查找评论操作栏
-        const actionBarSelectors = [
-            '.F3UVeHBA',  // 抖音评论区操作栏
-            '.comment-item-stats-container',
-            '[class*="comment-action"]',
-            '[class*="comment-operation"]',
-            '[class*="comment-footer"]',
-            '[data-e2e="comment-action"]'
-        ];
+        // 如果没找到，尝试通过子元素反推
+        if (!actionBar) {
+            const likeOrDislikeBtn = commentItem.querySelector('[data-e2e="comment-like"], [data-e2e="comment-dislike"]');
+            if (likeOrDislikeBtn) {
+                let currentEl = likeOrDislikeBtn;
+                for (let i = 0; i < 5 && currentEl; i++) {
+                    currentEl = currentEl.parentElement;
+                    if (!currentEl) break;
 
-        for (const selector of actionBarSelectors) {
-            try {
-                const actionBar = commentItem.querySelector(selector);
-                if (actionBar) {
-                    actionBar.appendChild(blockBtn);
-                    console.log('[抖音一键拉黑] 按钮插入到操作栏，选择器:', selector);
-                    return true;
-                }
-            } catch (e) {}
-        }
+                    // 检查是否包含分享或更多按钮，确认是操作栏
+                    const hasShare = currentEl.querySelector('[data-e2e="comment-share"]') ||
+                                      currentEl.textContent.includes('分享');
+                    const hasMore = currentEl.querySelector('[data-e2e="comment-more"]');
 
-        // 策略3：查找评论内容区域，插入到其后
-        const contentSelectors = [
-            '.gD6hDm2O',  // 抖音评论内容
-            '.comment-content',
-            '[class*="comment-content"]',
-            '[class*="comment-text"]',
-            '[data-e2e="comment-content"]'
-        ];
-
-        for (const selector of contentSelectors) {
-            try {
-                const contentEl = commentItem.querySelector(selector);
-                if (contentEl && contentEl.parentElement) {
-                    // 插入到内容元素后面
-                    if (contentEl.nextSibling) {
-                        contentEl.parentElement.insertBefore(blockBtn, contentEl.nextSibling);
-                    } else {
-                        contentEl.parentElement.appendChild(blockBtn);
+                    if ((hasShare || hasMore) && currentEl.children.length >= 3) {
+                        actionBar = currentEl;
+                        break;
                     }
-                    console.log('[抖音一键拉黑] 按钮插入到内容后，选择器:', selector);
-                    return true;
                 }
-            } catch (e) {}
+            }
         }
 
-        // 策略4：查找用户信息区域
-        const userInfoSelectors = [
-            '.quk4Qjlm',  // 抖音评论用户信息栏
-            '.comment-item-info-wrap',
-            '[class*="comment-user"]',
-            '[class*="comment-author"]'
-        ];
+        // 步骤2：在操作栏中找到不喜欢按钮，将按钮插入到其后
+        if (actionBar) {
+            // 查找不喜欢按钮（优先使用 data-e2e，备选使用 class）
+            let dislikeBtn = actionBar.querySelector('[data-e2e="comment-dislike"]');
 
-        for (const selector of userInfoSelectors) {
-            try {
-                const userInfoEl = commentItem.querySelector(selector);
-                if (userInfoEl && userInfoEl.parentElement) {
-                    userInfoEl.parentElement.insertBefore(blockBtn, userInfoEl.nextSibling);
-                    console.log('[抖音一键拉黑] 按钮插入到用户信息后，选择器:', selector);
-                    return true;
+            // 如果没找到，尝试通过 class 查找
+            if (!dislikeBtn) {
+                // 根据 HTML 结构，不喜欢按钮在第二个 p 元素中
+                const likeDislikeContainer = actionBar.querySelector('.I26W2ERo, .L2ptqwYp') || actionBar.firstElementChild;
+                if (likeDislikeContainer) {
+                    // 查找第二个 p 元素（不喜欢按钮）
+                    const pElements = likeDislikeContainer.querySelectorAll('p');
+                    if (pElements.length >= 2) {
+                        dislikeBtn = pElements[1]; // 第二个 p 是不喜欢按钮
+                    }
                 }
-            } catch (e) {}
+            }
+
+            // 如果找到了不喜欢按钮，在其后插入
+            if (dislikeBtn && dislikeBtn.parentElement) {
+                const parent = dislikeBtn.parentElement;
+                parent.insertBefore(blockBtn, dislikeBtn.nextSibling);
+                console.log('[抖音一键拉黑] 按钮成功插入到不喜欢按钮之后');
+                return true;
+            }
+
+            // 兜底：如果没找到不喜欢按钮，查找点赞按钮，在其后插入
+            const likeBtn = actionBar.querySelector('[data-e2e="comment-like"]');
+            if (likeBtn && likeBtn.parentElement) {
+                const parent = likeBtn.parentElement;
+                parent.insertBefore(blockBtn, likeBtn.nextSibling);
+                console.log('[抖音一键拉黑] 按钮插入到点赞按钮之后');
+                return true;
+            }
         }
 
-        // 策略5：在评论项的特定位置插入
-        // 尝试找到第一个子元素，插入到其后
-        const firstChild = commentItem.firstElementChild;
-        if (firstChild && firstChild.nextSibling) {
-            commentItem.insertBefore(blockBtn, firstChild.nextSibling);
-            console.log('[抖音一键拉黑] 按钮插入到第一个子元素后');
+        // 步骤3：兜底方案 - 全局查找不喜欢按钮
+        const globalDislikeBtn = commentItem.querySelector('[data-e2e="comment-dislike"]');
+        if (globalDislikeBtn && globalDislikeBtn.parentElement) {
+            const parent = globalDislikeBtn.parentElement;
+            parent.insertBefore(blockBtn, globalDislikeBtn.nextSibling);
+            console.log('[抖音一键拉黑] 按钮插入到不喜欢按钮之后（全局查找）');
             return true;
         }
 
-        // 策略6：直接添加到评论项末尾
+        // 步骤4：最后兜底 - 查找点赞/不喜欢容器，在最后一个子元素后插入
+        const likeDislikeContainer = commentItem.querySelector('.I26W2ERo, .L2ptqwYp');
+        if (likeDislikeContainer) {
+            // 查找不喜欢按钮（第二个 p 元素）
+            const pElements = likeDislikeContainer.querySelectorAll('p');
+            if (pElements.length >= 2) {
+                likeDislikeContainer.insertBefore(blockBtn, pElements[1].nextSibling);
+                console.log('[抖音一键拉黑] 按钮插入到不喜欢按钮之后（class查找）');
+                return true;
+            }
+            // 如果只有一个 p 元素，在其后插入
+            if (pElements.length === 1) {
+                likeDislikeContainer.insertBefore(blockBtn, pElements[0].nextSibling);
+                console.log('[抖音一键拉黑] 按钮插入到唯一按钮之后');
+                return true;
+            }
+        }
+
+        // 步骤5：最终兜底 - 直接添加到评论项的操作栏区域
+        const anyActionEl = commentItem.querySelector('[data-e2e="comment-like"], [data-e2e="comment-dislike"]');
+        if (anyActionEl) {
+            let container = anyActionEl;
+            for (let i = 0; i < 4 && container; i++) {
+                const parent = container.parentElement;
+                if (!parent) break;
+
+                // 如果父元素包含多个子元素，在此容器内插入到当前元素之后
+                if (parent.children.length >= 2) {
+                    parent.appendChild(blockBtn);
+                    console.log('[抖音一键拉黑] 按钮添加到容器内部末尾');
+                    return true;
+                }
+                container = parent;
+            }
+        }
+
+        // 步骤5：最终兜底 - 添加到评论项末尾
         commentItem.appendChild(blockBtn);
-        console.log('[抖音一键拉黑] 按钮添加到评论项末尾');
+        console.log('[抖音一键拉黑] 按钮添加到评论项末尾（最终兜底）');
         return true;
     }
 
     // 获取评论区作者信息 - 增强版（360浏览器兼容性优化）
     function getCommentAuthorInfo(commentItem) {
         console.log('[抖音一键拉黑] 开始获取评论作者信息...');
-
+        
         // 尝试多种选择器查找用户链接
         const userLinkSelectors = [
             // 高优先级选择器
@@ -1811,7 +1832,7 @@
 
         let authorLink = null;
         let usedSelector = '';
-
+        
         // 第一层：在当前元素内查找
         for (const selector of userLinkSelectors) {
             try {
@@ -1862,13 +1883,13 @@
         // 第四层：从data属性中获取
         if (!authorLink) {
             // 尝试从data属性获取secUid
-            const dataSecUid = commentItem.getAttribute('data-sec-uid') ||
+            const dataSecUid = commentItem.getAttribute('data-sec-uid') || 
                               commentItem.getAttribute('data-user-sec-uid');
             if (dataSecUid && dataSecUid.includes('MS4wLj')) {
                 console.log('[抖音一键拉黑] 从data属性获取到secUid:', dataSecUid);
                 return { secUid: dataSecUid };
             }
-
+            
             // 查找子元素中的data属性
             const elementsWithData = commentItem.querySelectorAll('[data-sec-uid], [data-user-sec-uid]');
             for (const el of elementsWithData) {
@@ -1884,16 +1905,16 @@
         if (authorLink) {
             const href = authorLink.getAttribute('href') || '';
             console.log('[抖音一键拉黑] 用户链接href:', href);
-
+            
             // 尝试多种方式提取secUid
             let secUid = null;
-
+            
             // 方式1：标准匹配 /user/xxx
             const match = href.match(/\/user\/([^?\s]+)/);
             if (match) {
                 secUid = match[1];
             }
-
+            
             // 方式2：直接匹配MS4wLj开头的secUid
             if (!secUid) {
                 const msMatch = href.match(/(MS4wLj[A-Za-z0-9_-]+)/);
@@ -1901,7 +1922,7 @@
                     secUid = msMatch[1];
                 }
             }
-
+            
             if (secUid) {
                 const result = { secUid: secUid };
 
@@ -1916,7 +1937,7 @@
                 if (userIdAttr) {
                     result.userId = userIdAttr.getAttribute('data-user-id');
                 }
-
+                
                 // 从当前元素获取userId
                 if (!result.userId) {
                     result.userId = commentItem.getAttribute('data-user-id');
@@ -1930,7 +1951,7 @@
         } else {
             console.log('[抖音一键拉黑] 未找到用户链接，评论HTML:', commentItem.innerHTML.substring(0, 300));
         }
-
+        
         // 最后一层：尝试从页面全局数据获取
         try {
             const win = unsafeWindow || window;
@@ -1943,7 +1964,7 @@
                 }
             }
         } catch (e) {}
-
+        
         return null;
     }
 
@@ -1970,20 +1991,31 @@
 
             btn.style.pointerEvents = 'none';
             const isCurrentlyBlocked = btn.dataset.blocked === 'true';
+            console.log('[抖音一键拉黑] 评论区按钮 - 当前拉黑状态:', isCurrentlyBlocked, '准备执行:', isCurrentlyBlocked ? '解除拉黑' : '拉黑');
+            
             const result = await blockUser(authorInfo.secUid, isCurrentlyBlocked);
+            console.log('[抖音一键拉黑] 评论区拉黑操作结果:', result);
 
-            if (result.success) {
-                if (result.isBlocked) {
+            if (result && result.success) {
+                console.log('[抖音一键拉黑] 评论区操作成功，新的拉黑状态:', result.isBlocked);
+                
+                if (result.isBlocked === true) {
                     btn.dataset.blocked = 'true';
                     btn.classList.add('blocked');
                     btn.title = '已拉黑';
                     showToast('已拉黑该用户');
-                } else {
+                    console.log('[抖音一键拉黑] 评论区按钮状态已更新为: 已拉黑');
+                } else if (result.isBlocked === false) {
                     btn.dataset.blocked = 'false';
                     btn.classList.remove('blocked');
                     btn.title = '拉黑用户';
                     showToast('已解除拉黑');
+                    console.log('[抖音一键拉黑] 评论区按钮状态已更新为: 未拉黑');
+                } else {
+                    console.log('[抖音一键拉黑] 警告: 评论区isBlocked值异常:', result.isBlocked);
                 }
+            } else {
+                console.log('[抖音一键拉黑] 评论区操作失败或结果异常:', result);
             }
 
             setTimeout(() => {
@@ -2000,74 +2032,152 @@
         return btn;
     }
 
-    // 为所有互动区域插入按钮
-    // 为所有互动区域插入按钮 - 增强版（360浏览器兼容性优化）
+    // 清理所有已存在的拉黑按钮（用于视频切换时）
+    function cleanupOldButtons() {
+        const oldButtons = document.querySelectorAll('.douyin-block-btn, .douyin-comment-block-btn');
+        if (oldButtons.length > 0) {
+            console.log('[抖音一键拉黑] 清理', oldButtons.length, '个旧按钮');
+            oldButtons.forEach(btn => {
+                try {
+                    btn.remove();
+                } catch (e) {
+                    console.log('[抖音一键拉黑] 清理按钮失败:', e.message);
+                }
+            });
+        }
+    }
+
+    // 为所有互动区域插入按钮 - 重构版（基于 data-e2e 和 DOM 结构）
+    // 核心原则：
+    // 1. 通过头像链接 a[data-e2e="video-avatar"] 或包含 /user/ 的链接定位
+    // 2. 向上遍历找到包含关注图标的容器作为互动区域
+    // 3. 完全避免使用 class 选择器
     function insertButtonsForAll() {
         console.log('[抖音一键拉黑] 开始查找互动区域...');
 
-        // 多种选择器尝试查找互动区域
-        const interactionSelectors = [
-            // 标准选择器
-            '.zqe4B9aR.WU6dkKao',
-            '.zqe4B9aR',
-            '.WU6dkKao',
-            // 通过data属性
-            '[data-e2e="interaction-area"]',
-            '[data-e2e="video-interaction"]',
-            // 通过结构特征
-            '.tFytGJmq',  // 抖音互动栏容器
-            '.EHfFajzd',  // 另一种互动栏
-            // 包含点赞/评论/分享按钮的区域
-            '[class*="interaction"]',
-            '[class*="Interaction"]',
-            // 右侧栏
-            '.side-bar',
-            '.right-side',
-            '[class*="sideBar"]',
-            '[class*="sidebar"]'
-        ];
-
-        let allInteractionAreas = [];
-        let usedSelector = '';
-
-        // 尝试所有选择器，收集所有可能的互动区域
-        for (const selector of interactionSelectors) {
-            try {
-                const areas = document.querySelectorAll(selector);
-                if (areas.length > 0) {
-                    console.log('[抖音一键拉黑] 使用选择器找到互动区域:', selector, areas.length, '个');
-                    // 验证这些区域是否包含用户头像或链接
-                    for (const area of areas) {
-                        const hasUserElement = area.querySelector('a[href*="/user/"]') ||
-                                              area.querySelector('img[src*="douyinpic.com"]') ||
-                                              area.querySelector('[class*="avatar"]');
-                        if (hasUserElement && !allInteractionAreas.includes(area)) {
-                            allInteractionAreas.push(area);
-                        }
-                    }
-                    if (!usedSelector) usedSelector = selector;
-                }
-            } catch (e) {
-                console.log('[抖音一键拉黑] 选择器执行失败:', selector, e.message);
+        // 清理已处理标记，允许重新处理（用于动态加载的新视频）
+        // 但保留按钮本身，避免闪烁
+        const processedAreas = document.querySelectorAll('[data-block-btn-processed]');
+        for (const area of processedAreas) {
+            // 检查是否真的有按钮，如果没有则移除标记重新处理
+            const panel = area.querySelector('[data-custom-inserted="block-btn"]');
+            if (!panel) {
+                area.removeAttribute('data-block-btn-processed');
             }
         }
 
-        // 如果没找到，尝试更通用的方法
+        let allInteractionAreas = [];
+
+        // 方法1：通过 data-e2e="video-avatar" 查找头像链接，然后向上找到互动区域
+        const avatarLinks = document.querySelectorAll('a[data-e2e="video-avatar"]');
+        console.log('[抖音一键拉黑] 找到', avatarLinks.length, '个头像链接（data-e2e="video-avatar"）');
+
+        for (const link of avatarLinks) {
+            // 向上遍历找到包含关注图标的容器
+            let currentEl = link;
+            let avatarBlock = null;
+            for (let i = 0; i < 10 && currentEl; i++) {
+                currentEl = currentEl.parentElement;
+                if (!currentEl) break;
+
+                // 检查是否包含关注图标
+                const followIcon = currentEl.querySelector('[data-e2e="feed-follow-icon"]');
+                if (followIcon) {
+                    avatarBlock = currentEl;
+                    break;
+                }
+            }
+
+            if (avatarBlock) {
+                // 找到头像容器后，获取其父节点（avatarContainer），再获取祖父节点（panel）
+                // panel 才是与 AI 按钮同一层级的父容器
+                const avatarContainer = avatarBlock.parentElement;
+                if (avatarContainer) {
+                    const panel = avatarContainer.parentElement;
+                    if (panel && !allInteractionAreas.includes(panel)) {
+                        // 验证面板是否包含点赞图标
+                        const diggIcon = panel.querySelector('[data-e2e="video-player-digg"]');
+                        if (diggIcon) {
+                            allInteractionAreas.push(panel);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 方法2：通过包含 /user/ 的链接查找（备选方案）
         if (allInteractionAreas.length === 0) {
-            console.log('[抖音一键拉黑] 尝试通过头像图片查找互动区域...');
-            const avatarImages = document.querySelectorAll('img[src*="douyinpic.com"]');
-            for (const img of avatarImages) {
-                let parent = img.parentElement;
-                for (let i = 0; i < 6 && parent; i++) {
-                    // 检查这个容器是否包含互动按钮（点赞、评论等）
-                    const hasLikeBtn = parent.querySelector('[data-e2e="like-button"]') ||
-                                      parent.querySelector('[class*="like"]') ||
-                                      parent.querySelector('svg');
-                    if (hasLikeBtn && !allInteractionAreas.includes(parent)) {
-                        allInteractionAreas.push(parent);
+            console.log('[抖音一键拉黑] 尝试通过用户链接查找互动区域...');
+            const userLinks = document.querySelectorAll('a[href*="/user/"]');
+
+            for (const link of userLinks) {
+                const href = link.getAttribute('href') || '';
+                // 确保是有效的用户链接
+                if (!href.includes('MS4wLj') && !href.match(/\/user\/[^\/\s?]+/)) {
+                    continue;
+                }
+
+                // 向上遍历找到包含关注图标的容器
+                let currentEl = link;
+                let avatarBlock = null;
+                for (let i = 0; i < 10 && currentEl; i++) {
+                    currentEl = currentEl.parentElement;
+                    if (!currentEl) break;
+
+                    // 检查是否包含关注图标
+                    const followIcon = currentEl.querySelector('[data-e2e="feed-follow-icon"]');
+                    if (followIcon) {
+                        avatarBlock = currentEl;
                         break;
                     }
-                    parent = parent.parentElement;
+                }
+
+                if (avatarBlock) {
+                    // 找到头像容器后，获取其父节点（avatarContainer），再获取祖父节点（panel）
+                    const avatarContainer = avatarBlock.parentElement;
+                    if (avatarContainer) {
+                        const panel = avatarContainer.parentElement;
+                        if (panel && !allInteractionAreas.includes(panel)) {
+                            // 验证面板是否包含点赞图标
+                            const diggIcon = panel.querySelector('[data-e2e="video-player-digg"]');
+                            if (diggIcon) {
+                                allInteractionAreas.push(panel);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 方法3：通过关注图标反向查找（兜底方案）
+        if (allInteractionAreas.length === 0) {
+            console.log('[抖音一键拉黑] 尝试通过关注图标反向查找...');
+            const followIcons = document.querySelectorAll('[data-e2e="feed-follow-icon"]');
+
+            for (const icon of followIcons) {
+                // 向上遍历：关注图标 -> 头像容器 -> 头像容器父节点 -> 互动面板
+                let currentEl = icon;
+                for (let i = 0; i < 5 && currentEl; i++) {
+                    currentEl = currentEl.parentElement;
+                    if (!currentEl) break;
+
+                    // 找到头像容器（包含关注图标的容器）
+                    const followIconCheck = currentEl.querySelector('[data-e2e="feed-follow-icon"]');
+                    if (followIconCheck && followIconCheck === icon) {
+                        // 再往上两层找到互动面板
+                        const avatarContainer = currentEl.parentElement;
+                        if (avatarContainer) {
+                            const panel = avatarContainer.parentElement;
+                            if (panel && !allInteractionAreas.includes(panel)) {
+                                // 检查是否包含点赞图标
+                                const diggIcon = panel.querySelector('[data-e2e="video-player-digg"]');
+                                if (diggIcon) {
+                                    allInteractionAreas.push(panel);
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -2081,7 +2191,7 @@
             const result = insertButtonForInteractionArea(area);
             if (result) {
                 insertedCount++;
-            } else if (area.querySelector('.douyin-block-btn')) {
+            } else if (area.querySelector('[data-custom-inserted="block-btn"]')) {
                 skippedCount++;
             }
         }
@@ -2138,7 +2248,7 @@
                             validCount++;
                         }
                     }
-
+                    
                     if (validCount > 0) {
                         allPotentialItems.push({
                             selector: selector,
@@ -2173,12 +2283,12 @@
 
         for (let i = 0; i < commentItems.length; i++) {
             const item = commentItems[i];
-
+            
             // 跳过无效的评论元素
             if (!isValidCommentElement(item)) {
                 continue;
             }
-
+            
             const result = insertButtonForComment(item);
             if (result === true) {
                 insertedCount++;
@@ -2202,20 +2312,20 @@
         if (!element || element.nodeType !== Node.ELEMENT_NODE) {
             return false;
         }
-
+        
         // 检查是否包含用户链接
         const hasUserLink = element.querySelector('a[href*="/user/"]') !== null ||
                            element.querySelector('a[href*="MS4wLj"]') !== null;
-
+        
         // 检查是否包含评论内容
         const hasContent = element.textContent && element.textContent.trim().length > 0;
-
+        
         // 检查是否是按钮本身（避免重复处理）
         const isButton = element.classList && (
             element.classList.contains('douyin-comment-block-btn') ||
             element.classList.contains('douyin-block-btn')
         );
-
+        
         return hasUserLink && hasContent && !isButton;
     }
 
@@ -2224,7 +2334,7 @@
         if (!isVideoDetailPage()) {
             return 0;
         }
-
+        
         const authorInfo = getAuthorInfoFromVideoDetailPage();
         if (!authorInfo || !authorInfo.secUid) {
             return 0;
@@ -2335,23 +2445,23 @@
         if (!isLiveStreamPage()) {
             return 0;
         }
-
+        
         const commentItems = document.querySelectorAll('.webcast-chatroom___item');
         let insertedCount = 0;
-
+        
         for (const item of commentItems) {
             if (item.querySelector('.live-block-btn')) continue;
-
+            
             const userInfo = getLiveStreamUserInfo(item);
             if (!userInfo || !userInfo.nickname) continue;
-
+            
             const btn = document.createElement('div');
             btn.className = 'live-block-btn';
             btn.dataset.blocked = 'false';
             btn.innerHTML = `
                 <svg class="icon" style="width: 1em;height: 1em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4148"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" fill="#252424" p-id="4149"></path></svg>
             `;
-
+            
             btn.style.cssText = `
                 display: inline-flex;
                 align-items: center;
@@ -2364,7 +2474,7 @@
                 transition: all 0.2s;
                 margin-left: 8px;
             `;
-
+            
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 btn.style.pointerEvents = 'none';
@@ -2391,7 +2501,7 @@
                 }
 
                 const result = await blockUser(secUid, isCurrentlyBlocked);
-
+                
                 if (result.success) {
                     if (result.isBlocked) {
                         btn.dataset.blocked = 'true';
@@ -2403,7 +2513,7 @@
                         showToast('已解除拉黑 ' + userInfo.nickname);
                     }
                 }
-
+                
                 setTimeout(() => {
                     btn.style.pointerEvents = 'auto';
                 }, 1000);
@@ -2414,14 +2524,14 @@
                 e.stopPropagation();
                 openBlockSettings();
             });
-
+            
             const wrapper = item.querySelector('.NkS2Invn');
             if (wrapper) {
                 wrapper.prepend(btn);
                 insertedCount++;
             }
         }
-
+        
         return insertedCount;
     }
 
@@ -2431,33 +2541,33 @@
         if (isVideoDetailPage() || isLiveStreamPage()) {
             return 0;
         }
-
+        
         // 检查是否存在直播间播放器
         const playerControls = document.querySelector('.douyin-player-controls');
         if (!playerControls) {
             return 0;
         }
-
+        
         // 检查是否已插入
         if (document.querySelector('.douyin-recommend-live-block-btn')) {
             return 0;
         }
-
+        
         const hostInfo = getLiveStreamHostInfo();
         if (!hostInfo || !hostInfo.secUid) {
             console.log('[抖音一键拉黑] 无法获取推荐页直播间主播信息');
             return 0;
         }
-
+        
         console.log('[抖音一键拉黑] 推荐页直播间主播信息:', hostInfo);
-
+        
         const btn = document.createElement('div');
         btn.className = 'douyin-recommend-live-block-btn';
         btn.dataset.blocked = 'false';
         btn.innerHTML = `
             <svg class="icon" style="width: 1em;height: 1em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4148"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" fill="#252424" p-id="4149"></path></svg>
         `;
-
+        
         btn.style.cssText = `
             display: flex;
             align-items: center;
@@ -2470,7 +2580,7 @@
             transition: all 0.2s;
             background: rgba(0, 0, 0, 0.3);
         `;
-
+        
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             btn.style.pointerEvents = 'none';
@@ -2508,7 +2618,7 @@
             console.log('[抖音一键拉黑] 推荐页直播间拉黑按钮已插入');
             return 1;
         }
-
+        
         return 0;
     }
 
@@ -2532,16 +2642,16 @@
             console.log('[抖音一键拉黑] 无法获取直播间主播信息');
             return 0;
         }
-
+        
         console.log('[抖音一键拉黑] 直播间主播信息:', hostInfo);
-
+        
         const btn = document.createElement('div');
         btn.className = 'live-host-block-btn';
         btn.dataset.blocked = 'false';
         btn.innerHTML = `
             <svg class="icon" style="width: 1em;height: 1em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4148"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" fill="#252424" p-id="4149"></path></svg>
         `;
-
+        
         btn.style.cssText = `
             display: flex;
             align-items: center;
@@ -2553,7 +2663,7 @@
             border-radius: 8px;
             transition: all 0.2s;
         `;
-
+        
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             btn.style.pointerEvents = 'none';
@@ -2592,13 +2702,13 @@
             followBtn.parentElement.insertBefore(btn, followBtn.nextSibling);
             return 1;
         }
-
+        
         return 0;
     }
 
     // 主初始化函数 - 增强版
     function init() {
-        console.log('[抖音拉黑] 初始化 v4.1 (增强版)');
+        console.log('[抖音拉黑] 初始化 v4.5 (增强版)');
 
         // 首次立即插入
         insertButtonsForAll();
@@ -2611,94 +2721,11 @@
         // 推荐页直播间
         // insertButtonForRecommendLiveStream();
 
-        // 智能重试机制 - 带退避策略
-        let retryCount = 0;
-        const maxRetries = 15;
-        const baseInterval = 300;
-
-        function smartRetry() {
-            if (retryCount >= maxRetries) {
-                console.log('[抖音一键拉黑] 重试次数已达上限，停止重试');
-                return;
-            }
-
-            retryCount++;
-
-            // 计算退避时间（指数退避 + 随机抖动）
-            const backoffDelay = Math.min(baseInterval * Math.pow(1.2, retryCount), 2000);
-            const jitter = Math.random() * 200;
-            const delay = backoffDelay + jitter;
-
-            let totalInserted = 0;
-            totalInserted += insertButtonsForAll();
-            totalInserted += insertButtonsForComments();
-
-            if (isVideoDetailPage()) {
-                totalInserted += insertButtonForVideoDetailPage();
-            }
-
-            // 如果成功插入了按钮，记录日志
-            if (totalInserted > 0) {
-                console.log(`[抖音一键拉黑] 第${retryCount}次重试成功插入${totalInserted}个按钮`);
-            }
-
-            // 继续下一次重试
-            setTimeout(smartRetry, delay);
-        }
-
-        // 启动智能重试
-        smartRetry();
-
-        // 评论区智能检查机制（带自适应频率）
-        let checkInterval = 2000;
-        let consecutiveEmptyChecks = 0;
-        const maxConsecutiveEmpty = 5;
-
-        const commentCheckInterval = setInterval(() => {
-            const commentItems = document.querySelectorAll('[data-e2e="comment-item"], .comment-mainContent, .iHMk75le');
-
-            if (commentItems.length === 0) {
-                consecutiveEmptyChecks++;
-                // 如果连续多次没有找到评论，增加检查间隔
-                if (consecutiveEmptyChecks >= maxConsecutiveEmpty) {
-                    checkInterval = Math.min(checkInterval * 1.5, 10000); // 最大10秒
-                    console.log('[抖音一键拉黑] 评论区检查间隔调整为:', checkInterval, 'ms');
-                }
-                return;
-            }
-
-            // 重置计数器
-            consecutiveEmptyChecks = 0;
-            checkInterval = 2000;
-
-            // 检查缺少按钮的评论
-            let missingCount = 0;
-            const validCommentItems = [];
-
-            for (const item of commentItems) {
-                if (isValidCommentElement(item) && !item.querySelector('.douyin-comment-block-btn')) {
-                    missingCount++;
-                    validCommentItems.push(item);
-                }
-            }
-
-            if (missingCount > 0) {
-                console.log('[抖音一键拉黑] 定时检查: 发现', missingCount, '条有效评论缺少按钮，重新插入');
-
-                // 只处理缺少按钮的评论，而不是全部重新处理
-                for (const item of validCommentItems) {
-                    insertButtonForComment(item);
-                }
-            }
-        }, checkInterval);
-
         // 页面可见性变化时的处理
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 console.log('[抖音一键拉黑] 页面变为可见，重新检查评论区');
-                setTimeout(() => {
-                    insertButtonsForComments();
-                }, 500);
+                insertButtonsForComments();
             }
         });
     }
@@ -2720,18 +2747,38 @@
                 if (mutation.type === 'childList') {
                     for (const node of mutation.addedNodes) {
                         if (node.nodeType === Node.ELEMENT_NODE) {
-                            // 检测视频区域
-                            if (node.classList && node.classList.contains('zqe4B9aR') && node.classList.contains('WU6dkKao')) {
+                            // 检测视频区域 - 基于 data-e2e 和结构关系（避免使用 class）
+                            // 方式1：检测到包含视频头像链接的新节点
+                            if (node.querySelector && node.querySelector('a[data-e2e="video-avatar"]')) {
                                 hasNewVideo = true;
                             }
-                            else if (node.querySelector && node.querySelector('.zqe4B9aR.WU6dkKao')) {
+                            // 方式2：检测到包含用户链接的新节点
+                            else if (node.querySelector && node.querySelector('a[href*="/user/"]')) {
+                                // 进一步验证是否包含点赞图标，确认是互动区域
+                                if (node.querySelector('[data-e2e="video-player-digg"]')) {
+                                    hasNewVideo = true;
+                                }
+                            }
+                            // 方式3：检测到包含关注图标的新节点
+                            else if (node.querySelector && node.querySelector('[data-e2e="feed-follow-icon"]')) {
+                                // 进一步验证是否包含点赞图标
+                                if (node.querySelector('[data-e2e="video-player-digg"]')) {
+                                    hasNewVideo = true;
+                                }
+                            }
+                            // 方式4：检测到包含点赞图标的新节点（可能是新的互动面板）
+                            else if (node.getAttribute && node.getAttribute('data-e2e') === 'video-player-digg') {
                                 hasNewVideo = true;
                             }
-                            else if (node.classList && node.classList.contains('swiper-slide')) {
+                            // 方式5：检测到视频播放器相关节点
+                            else if (node.getAttribute && (
+                                node.getAttribute('data-e2e') === 'video-player' ||
+                                node.getAttribute('data-e2e') === 'slide-content'
+                            )) {
                                 hasNewVideo = true;
                             }
 
-                            // 检测评论区 - 多种方式
+                            // 检测评论区 - 基于 data-e2e
                             // 方式1：直接检测评论项
                             if (node.getAttribute && node.getAttribute('data-e2e') === 'comment-item') {
                                 hasNewComment = true;
@@ -2740,15 +2787,7 @@
                                     lastProcessedComments.add(node);
                                 }
                             }
-                            // 方式2：检测评论容器
-                            else if (node.classList && (
-                                node.classList.contains('comment-mainContent') ||
-                                node.classList.contains('UuCzPLbi') ||
-                                node.classList.contains('iHMk75le')
-                            )) {
-                                hasNewComment = true;
-                            }
-                            // 方式3：检测包含评论项的容器
+                            // 方式2：检测包含评论项的容器
                             else if (node.querySelector) {
                                 const commentItems = node.querySelectorAll('[data-e2e="comment-item"]');
                                 if (commentItems.length > 0) {
@@ -2803,7 +2842,7 @@
                     }
                 }, 100);
             }
-
+            
             // 清理已处理集合，防止内存泄漏（保留最近1000个）
             if (lastProcessedComments.size > 1000) {
                 const iterator = lastProcessedComments.values();
@@ -3328,7 +3367,7 @@
         }, 1000);
     }
 
-    console.log('[抖音一键拉黑] v4.4 修复版脚本加载完成');
+    console.log('[抖音一键拉黑] v4.5 修复版脚本加载完成');
     console.log('[抖音一键拉黑] 当前快捷键: ' + getShortcutDisplayName());
     console.log('[抖音一键拉黑] 右键点击拉黑按钮可打开设置面板');
     console.log('[抖音一键拉黑] 360浏览器兼容性优化已启用');
