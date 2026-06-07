@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         抖音一键拉黑
 // @namespace    https://github.com/Lun-OS/Tampermonkey-Douyin_BlockPlus
-// @version      4.5
-// @description  抖音拉黑从未如此丝滑——0.01秒接口直封，无需模拟点击，无需跳转菜单。全场景（推荐/详情/评论...）按钮自动就位，点一下瞬间屏蔽/解除，纯净体验零等待。【v4.5修复版：修复按钮位置，使其水平排列在头像旁边】
+// @version      5.5
+// @description  抖音拉黑从未如此丝滑——0.01秒接口直封，无需模拟点击，无需跳转菜单。全场景（推荐/详情/评论/直播间...）按钮自动就位，点一下瞬间屏蔽/解除，纯净体验零等待。长按快捷键批量拉黑评论区所有用户（并发数与触发时间可配置），作者评论可选择性最后拉黑。关键词自动拉黑 + 命中隐藏，拉黑记录可查看与清除。
 // @author       Lun.
 // @match        https://www.douyin.com/*
 // @match        https://www.douyin.com/
@@ -10,6 +10,7 @@
 // @match        https://live.douyin.com/*
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
+// @connect      live.douyin.com
 // @grant        unsafeWindow
 // @license      MIT
 // @run-at       document-end
@@ -20,7 +21,7 @@
 (function() {
     'use strict';
 
-    console.log('[抖音拉黑] v4.5');
+    console.log('[抖音拉黑] v5.5 (关键词拉黑 + 拉黑日志版)');
 
     // 清理旧版本的设置项
     localStorage.removeItem('douyin-block-comment-shortcut-enabled');
@@ -253,6 +254,52 @@
         .douyin-block-settings-close:hover {
             opacity: 1;
         }
+        /* 开关按钮 - iOS 风格，与面板整体深色融合 */
+        .douyin-block-settings-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+            flex-shrink: 0;
+        }
+        .douyin-block-settings-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .douyin-block-settings-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #2a2a2a;
+            transition: .25s ease;
+            border-radius: 22px;
+            border: 1px solid #3a3a3a;
+        }
+        .douyin-block-settings-slider::before {
+            content: "";
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #6a6a6a;
+            transition: .25s ease;
+            border-radius: 50%;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+        }
+        .douyin-block-settings-switch input:checked + .douyin-block-settings-slider {
+            background-color: #3a3a3a;
+            border-color: #555;
+        }
+        .douyin-block-settings-switch input:checked + .douyin-block-settings-slider::before {
+            transform: translateY(-50%) translateX(18px);
+            background-color: #e0e0e0;
+        }
         .douyin-block-settings-row {
             display: flex;
             align-items: center;
@@ -313,6 +360,114 @@
                 fill: #a0a0a0;
             }
         }
+        /* 批量拉黑状态指示器 - 深色磨砂风格（与设置面板一致） */
+        #douyin-batch-block-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(28, 28, 30, 0.96);
+            color: #e8e8e8;
+            padding: 14px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            z-index: 99999;
+            pointer-events: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.25);
+            display: none;
+            line-height: 1.55;
+            min-width: 220px;
+            border: 1px solid #333;
+            backdrop-filter: blur(12px) saturate(180%);
+            -webkit-backdrop-filter: blur(12px) saturate(180%);
+            animation: batchIndicatorSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes batchIndicatorSlideIn {
+            from { transform: translateX(40px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        #douyin-batch-block-indicator .batch-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: #f5f5f5;
+        }
+        #douyin-batch-block-indicator .batch-pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #b8b8b8;
+            box-shadow: 0 0 0 0 rgba(184, 184, 184, 0.7);
+            animation: batchPulse 1.4s infinite;
+        }
+        @keyframes batchPulse {
+            0% { box-shadow: 0 0 0 0 rgba(184, 184, 184, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(184, 184, 184, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(184, 184, 184, 0); }
+        }
+        #douyin-batch-block-indicator .batch-stats {
+            display: flex;
+            gap: 14px;
+            font-size: 12px;
+            opacity: 0.95;
+            padding-top: 6px;
+            border-top: 1px solid #333;
+            margin-top: 4px;
+            color: #cfcfcf;
+        }
+        #douyin-batch-block-indicator .batch-count {
+            font-weight: 700;
+            font-size: 15px;
+            color: #ffffff;
+        }
+        #douyin-batch-block-indicator .batch-phase {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-top: 2px;
+            color: #aaaaaa;
+        }
+        /* 评论区按钮的"批量已拉黑"过渡动画 */
+        @keyframes batchBlockedFade {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.25); }
+            100% { transform: scale(1); }
+        }
+        .douyin-comment-block-btn.batch-just-blocked {
+            animation: batchBlockedFade 0.4s ease;
+        }
+        /* 拉黑日志页专用样式 */
+        .douyin-block-log-list::-webkit-scrollbar { width: 6px; }
+        .douyin-block-log-list::-webkit-scrollbar-track { background: #1a1a1a; }
+        .douyin-block-log-list::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        .douyin-block-log-list::-webkit-scrollbar-thumb:hover { background: #666; }
+        .douyin-block-log-item a:hover { color: #ccc !important; text-decoration: underline !important; }
+        .log-remove-btn:hover { background: #333 !important; color: #fff !important; border-color: #888 !important; }
+        .log-unblock-btn:hover { background: #333 !important; color: #fff !important; border-color: #888 !important; }
+        .log-unblock-btn:disabled { opacity: 0.5; cursor: not-allowed !important; }
+        /* 屏蔽词输入框聚焦样式 */
+        #block-words-input:focus { outline: none; border-color: #5a5a5a; }
+        /* 弹幕拉黑按钮 */
+        .douyin-danmu-block-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            padding: 0 2px;
+            border-radius: 3px;
+            background: rgba(0,0,0,0.4);
+            transition: all 0.2s;
+            margin-left: 4px;
+            vertical-align: middle;
+            line-height: 1;
+        }
+        .douyin-danmu-block-btn:hover {
+            background: rgba(0,0,0,0.7);
+            transform: scale(1.15);
+        }
+        .douyin-danmu-block-btn svg { display: block; }
     `);
 
     // 显示提示
@@ -327,7 +482,53 @@
     // 从按钮所在容器获取视频作者信息 - 增强版（360浏览器兼容性优化）
     function getVideoAuthorInfoFromContainer(container) {
         console.log('[抖音一键拉黑] 开始从容器获取视频作者信息...');
-        
+
+        // 检测是否是直播卡片
+        const liveRoomId = container.getAttribute('data-live-room-id');
+        if (liveRoomId) {
+            console.log('[抖音一键拉黑] 检测到直播卡片，room_id:', liveRoomId);
+
+            // 搜索范围：从容器向上遍历到 feed-item 级别
+            const searchRoots = [container];
+            let ancestor = container.parentElement;
+            for (let i = 0; i < 10 && ancestor; i++) {
+                searchRoots.push(ancestor);
+                if (ancestor.hasAttribute('data-e2e') && ancestor.getAttribute('data-e2e') === 'feed-item') {
+                    break;
+                }
+                ancestor = ancestor.parentElement;
+            }
+
+            // 在多层容器中搜索 user 链接
+            for (const root of searchRoots) {
+                const userLink = root.querySelector('a[href*="/user/MS4wLj"]');
+                if (userLink) {
+                    const href = userLink.getAttribute('href') || '';
+                    const secUidMatch = href.match(/MS4wLj[A-Za-z0-9_\-]{15,}/);
+                    if (secUidMatch) {
+                        console.log('[抖音一键拉黑] 从直播卡片user链接提取到sec_uid:', secUidMatch[0]);
+                        return { isLiveCard: true, liveRoomId: liveRoomId, secUid: secUidMatch[0] };
+                    }
+                }
+            }
+
+            // 尝试更宽泛的搜索：查找任何包含 MS4wLj 的链接
+            for (const root of searchRoots) {
+                const allLinks = root.querySelectorAll('a');
+                for (const link of allLinks) {
+                    const href = link.getAttribute('href') || '';
+                    const secUidMatch = href.match(/MS4wLj[A-Za-z0-9_\-]{15,}/);
+                    if (secUidMatch) {
+                        console.log('[抖音一键拉黑] 从直播卡片遍历链接提取到sec_uid:', secUidMatch[0]);
+                        return { isLiveCard: true, liveRoomId: liveRoomId, secUid: secUidMatch[0] };
+                    }
+                }
+            }
+
+            console.log('[抖音一键拉黑] 直播卡片无法从DOM提取sec_uid，将依赖API');
+            return { isLiveCard: true, liveRoomId: liveRoomId, secUid: null };
+        }
+
         // 第一层：标准用户链接选择器
         let authorLink = container.querySelector('a[href*="/user/"]');
         let foundMethod = '标准选择器';
@@ -338,7 +539,7 @@
             if (liveAvatarWrapper) {
                 authorLink = liveAvatarWrapper.querySelector('a[href*="/user/"]');
                 if (authorLink) foundMethod = '直播头像框';
-                
+
                 // 如果还是没找到，尝试查找任何包含 user 链接的 a 标签
                 if (!authorLink) {
                     const allLinks = liveAvatarWrapper.querySelectorAll('a');
@@ -362,7 +563,7 @@
                 '[class*="avatar"] img',
                 '.semi-avatar img'
             ];
-            
+
             for (const selector of avatarSelectors) {
                 const avatarImg = container.querySelector(selector);
                 if (avatarImg) {
@@ -403,7 +604,7 @@
                 console.log('[抖音一键拉黑] 从容器data属性获取到secUid:', dataSecUid);
                 return { secUid: dataSecUid };
             }
-            
+
             // 查找子元素中的data属性
             const elementsWithData = container.querySelectorAll('[data-sec-uid], [data-user-sec-uid]');
             for (const el of elementsWithData) {
@@ -419,16 +620,16 @@
         if (authorLink) {
             const href = authorLink.getAttribute('href') || '';
             console.log('[抖音一键拉黑] 找到用户链接，方式:', foundMethod, 'href:', href);
-            
+
             // 尝试多种方式提取secUid
             let secUid = null;
-            
+
             // 方式1：标准匹配
             const match = href.match(/\/user\/([^?\s]+)/);
             if (match) {
                 secUid = match[1];
             }
-            
+
             // 方式2：直接匹配MS4wLj
             if (!secUid) {
                 const msMatch = href.match(/(MS4wLj[A-Za-z0-9_-]+)/);
@@ -436,7 +637,7 @@
                     secUid = msMatch[1];
                 }
             }
-            
+
             if (secUid) {
                 const result = { secUid: secUid };
 
@@ -451,7 +652,7 @@
                 if (userIdAttr) {
                     result.userId = userIdAttr.getAttribute('data-user-id');
                 }
-                
+
                 // 从当前元素获取
                 if (!result.userId) {
                     result.userId = container.getAttribute('data-user-id');
@@ -484,7 +685,7 @@
     // 从视频详情页面获取作者信息
     function getAuthorInfoFromVideoDetailPage() {
         const win = unsafeWindow || window;
-        
+
         if (win.__SSR_DATA__ && win.__SSR_DATA__.user) {
             const user = win.__SSR_DATA__.user;
             if (user.sec_uid) {
@@ -494,7 +695,7 @@
                 };
             }
         }
-        
+
         const userLinks = document.querySelectorAll('a[href*="/user/MS4wLj"]');
         if (userLinks.length > 0) {
             const href = userLinks[0].getAttribute('href');
@@ -503,7 +704,7 @@
                 return { secUid: match[1] };
             }
         }
-        
+
         const authorElements = document.querySelectorAll('[data-sec-uid], [data-author-sec-uid]');
         for (const el of authorElements) {
             const secUid = el.getAttribute('data-sec-uid') || el.getAttribute('data-author-sec-uid');
@@ -514,7 +715,7 @@
                 };
             }
         }
-        
+
         return null;
     }
 
@@ -574,7 +775,7 @@
         // 方式0: 尝试使用 API 获取主播信息
         if (anchorId) {
             try {
-                let profileUrl = `https://live.douyin.com/webcast/user/profile/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=${window.screen.width}&screen_height=${window.screen.height}&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=${getBrowserVersion()}&os_name=Windows&os_version=10&anchor_id=${anchorId}&click_source=pc_pc_comment_user&msToken=${generateMsToken()}`;
+                let profileUrl = `https://live.douyin.com/webcast/user/profile/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=${window.screen.width}&screen_height=${window.screen.height}&browser_language=${navigator.language||'zh-CN'}&browser_platform=${navigator.platform||'Win32'}&browser_name=${(()=>{const ua=navigator.userAgent;return ua.includes('Edg/')?'Edge':ua.includes('OPR/')||ua.includes('Opera')?'Opera':ua.includes('Chrome/')?'Chrome':ua.includes('Safari/')?'Safari':ua.includes('Firefox/')?'Firefox':'Chrome'})()}&browser_version=${getBrowserVersion()}&os_name=${(()=>{const ua=navigator.userAgent;return ua.includes('Windows')?'Windows':ua.includes('Mac OS')||ua.includes('Macintosh')?'Mac':ua.includes('Linux')?'Linux':'Windows'})()}&os_version=${(()=>{const ua=navigator.userAgent;const wm=ua.match(/Windows NT (\d+\.\d+)/);if(wm)return parseFloat(wm[1])>10?'11':'10';const mm=ua.match(/Mac OS X (\d+[._]\d+)/);if(mm)return mm[1].replace(/_/g,'.');return'10'})()}&anchor_id=${anchorId}&click_source=pc_pc_comment_user&msToken=${generateMsToken()}`;
 
                 if (secAnchorId) {
                     profileUrl += `&sec_anchor_id=${secAnchorId}`;
@@ -584,7 +785,7 @@
                     method: 'GET',
                     headers: {
                         'Accept': 'application/json, text/plain, */*',
-                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                        'Accept-Language': navigator.language || 'zh-CN',
                         'Referer': pageUrl
                     },
                     credentials: 'include'
@@ -668,10 +869,10 @@
         // 查找直播间播放器容器
         const playerContainer = document.querySelector('.douyin-player-controls');
         if (!playerContainer) return null;
-        
+
         // 尝试从页面数据获取主播信息
         const win = unsafeWindow || window;
-        
+
         // 尝试从 __INITIAL_STATE__ 获取
         if (win.__INITIAL_STATE__ && win.__INITIAL_STATE__.room && win.__INITIAL_STATE__.room.owner) {
             const owner = win.__INITIAL_STATE__.room.owner;
@@ -680,7 +881,7 @@
                 userId: owner.uid || owner.user_id
             };
         }
-        
+
         // 尝试从 data-* 属性获取
         const playerEl = document.querySelector('[data-room-id]') || document.querySelector('[data-anchor-sec-uid]');
         if (playerEl) {
@@ -689,128 +890,322 @@
                 userId: playerEl.dataset.anchorUid || playerEl.dataset.uid
             };
         }
-        
+
         return null;
+    }
+
+    // ========== 直播间评论用户ID获取（WebSocket拦截 + React Fiber方案）==========
+
+    // 直播间评论用户信息缓存：nickname → {secUid, userId}
+    const liveCommentUserMap = new Map();
+    let wsInterceptorInstalled = false;
+
+    // 从 React Fiber 节点中提取用户信息
+    function extractUserFromFiber(domElement) {
+        const fiberKey = Object.keys(domElement).find(k =>
+            k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$')
+        );
+        if (!fiberKey) return null;
+
+        let node = domElement[fiberKey];
+        let depth = 0;
+        while (node && depth < 20) {
+            const props = node.memoizedProps || node.pendingProps || {};
+            if (props.user || props.userInfo || props.msg || props.message) {
+                const u = props.user || props.userInfo || (props.msg && props.msg.user) || (props.message && props.message.user);
+                if (u) {
+                    const secUid = u.sec_uid || u.secUid || u.sec_uid_str || u.secUidStr;
+                    const uid = u.uid || u.user_id || u.userId || u.id || u.id_str || u.idStr;
+                    const nick = u.nickname || u.nick_name || u.nickName || u.name;
+                    if (secUid && nick) {
+                        liveCommentUserMap.set(nick, { secUid: secUid, userId: uid || null });
+                        return { nickname: nick, secUid: secUid, userId: uid || null };
+                    }
+                }
+            }
+            // 检查直接挂在props上的uid/sec_uid
+            if (props.secUid || props.sec_uid || props.uid) {
+                const secUid = props.secUid || props.sec_uid;
+                const uid = props.uid || props.userId || props.user_id;
+                const nick = props.nickname || props.nickName || props.name;
+                if (secUid && nick) {
+                    liveCommentUserMap.set(nick, { secUid: secUid, userId: uid || null });
+                    return { nickname: nick, secUid: secUid, userId: uid || null };
+                }
+            }
+            // 递归检查children
+            if (props.children) {
+                const children = Array.isArray(props.children) ? props.children : [props.children];
+                for (const child of children) {
+                    if (child && child.props) {
+                        const result = extractUserFromChildProps(child);
+                        if (result) return result;
+                    }
+                }
+            }
+            node = node.return;
+            depth++;
+        }
+        return null;
+    }
+
+    function extractUserFromChildProps(child) {
+        const p = child.props || {};
+        const u = p.user || p.userInfo;
+        if (u) {
+            const secUid = u.sec_uid || u.secUid;
+            const uid = u.uid || u.user_id || u.userId || u.id;
+            const nick = u.nickname || u.nick_name || u.name;
+            if (secUid && nick) {
+                liveCommentUserMap.set(nick, { secUid: secUid, userId: uid || null });
+                return { nickname: nick, secUid: secUid, userId: uid || null };
+            }
+        }
+        return null;
+    }
+
+    // 从WebSocket消息中提取用户信息（protobuf文本提取）
+    function processWebSocketMessage(data) {
+        let rawStr = '';
+        try {
+            if (typeof data === 'string') {
+                rawStr = data;
+            } else if (data instanceof ArrayBuffer) {
+                const bytes = new Uint8Array(data);
+                for (let i = 0; i < bytes.length; i++) {
+                    const b = bytes[i];
+                    if (b >= 0x20 && b <= 0x7e || b >= 0x80) {
+                        rawStr += String.fromCharCode(b);
+                    }
+                }
+            } else if (data instanceof Uint8Array) {
+                for (let i = 0; i < data.length; i++) {
+                    const b = data[i];
+                    if (b >= 0x20 && b <= 0x7e || b >= 0x80) {
+                        rawStr += String.fromCharCode(b);
+                    }
+                }
+            } else {
+                rawStr = String(data);
+            }
+        } catch (e) { return; }
+
+        // 查找sec_uid模式
+        const secUidMatches = [];
+        const secUidRegex = /MS4wLj[A-Za-z0-9_\-]{15,}/g;
+        let secMatch;
+        while ((secMatch = secUidRegex.exec(rawStr)) !== null) {
+            secUidMatches.push({ value: secMatch[0], idx: secMatch.index });
+        }
+
+        // 查找数字user_id
+        const userIdMatches = [];
+        const uidRegex = /\b(\d{8,15})\b/g;
+        let uidMatch;
+        while ((uidMatch = uidRegex.exec(rawStr)) !== null) {
+            userIdMatches.push({ value: uidMatch[1], idx: uidMatch.index });
+        }
+
+        if (secUidMatches.length === 0) return;
+
+        // 尝试查找昵称：sec_uid附近的非ASCII文本
+        for (const su of secUidMatches) {
+            const nearby = rawStr.substring(Math.max(0, su.idx - 60), Math.min(rawStr.length, su.idx + 100));
+            const nickMatch = nearby.match(/[\u4e00-\u9fff][\u4e00-\u9fff\w_\-.]{0,20}/);
+            const nick = nickMatch ? nickMatch[0] : null;
+
+            // 找最近的userId
+            let closestUid = null;
+            let closestDist = Infinity;
+            for (const um of userIdMatches) {
+                const dist = Math.abs(um.idx - su.idx);
+                if (dist < closestDist && dist < 300) {
+                    closestDist = dist;
+                    closestUid = um.value;
+                }
+            }
+
+            if (nick) {
+                if (!liveCommentUserMap.has(nick)) {
+                    liveCommentUserMap.set(nick, { secUid: su.value, userId: closestUid });
+                }
+            } else if (closestUid) {
+                liveCommentUserMap.set('uid_' + closestUid, { secUid: su.value, userId: closestUid });
+            }
+        }
+
+        // 尝试JSON解析
+        try {
+            const json = JSON.parse(rawStr);
+            extractUserFromJSON(json);
+        } catch (e) {}
+    }
+
+    function extractUserFromJSON(obj) {
+        if (!obj || typeof obj !== 'object') return;
+        if (Array.isArray(obj)) {
+            obj.forEach(v => extractUserFromJSON(v));
+            return;
+        }
+        const secUid = obj.sec_uid || obj.secUid || obj.secUserId || obj.sec_uid_str;
+        const uid = obj.user_id || obj.userId || obj.id || obj.id_str;
+        const nick = obj.nickname || obj.nick_name || obj.nickName || obj.name;
+        if (secUid && nick) {
+            liveCommentUserMap.set(nick, { secUid: secUid, userId: uid || null });
+        }
+        Object.values(obj).forEach(v => {
+            if (typeof v === 'object' && v !== null) extractUserFromJSON(v);
+        });
+    }
+
+    // WebSocket拦截器
+    function setupWebSocketInterceptor() {
+        if (wsInterceptorInstalled) return;
+        wsInterceptorInstalled = true;
+
+        const win = unsafeWindow || window;
+        const OriginalWebSocket = win.WebSocket;
+
+        function WebSocketProxy(url, protocols) {
+            const isWebcast = typeof url === 'string' && (
+                url.includes('webcast') || url.includes('push') || url.includes('douyin')
+            );
+            const ws = protocols ?
+                new OriginalWebSocket(url, protocols) :
+                new OriginalWebSocket(url);
+
+            if (isWebcast) {
+                console.log('[抖音拉黑] 拦截到直播WebSocket:', url.substring(0, 100));
+
+                ws.addEventListener('message', function(event) {
+                    processWebSocketMessage(event.data);
+                });
+            }
+
+            return ws;
+        }
+        WebSocketProxy.prototype = OriginalWebSocket.prototype;
+        WebSocketProxy.CONNECTING = OriginalWebSocket.CONNECTING;
+        WebSocketProxy.OPEN = OriginalWebSocket.OPEN;
+        WebSocketProxy.CLOSING = OriginalWebSocket.CLOSING;
+        WebSocketProxy.CLOSED = OriginalWebSocket.CLOSED;
+
+        win.WebSocket = WebSocketProxy;
+
+        console.log('[抖音拉黑] WebSocket拦截器已启动');
     }
 
     // 获取直播间评论用户信息
     function getLiveStreamUserInfo(commentElement) {
+        // 1. 提取昵称元素（按已知DOM结构：.NkS2Invn > .v8LY0gZF）
         const nicknameSelectors = [
-            '.v8LY0gZF',
+            '.v8LY0gZF',                          // 抖音直播间昵称专用类
+            '.NkS2Invn span[class]',              // 昵称容器内的classed span
             '[class*="nickname"]',
-            '[class*="user"]',
-            '[class*="name"]',
-            '.NkS2Invn',
+            '[class*="nick"]',
+            'a[href*="/user/"]',
         ];
-
         let nicknameEl = null;
         for (const sel of nicknameSelectors) {
-            try {
-                nicknameEl = commentElement.querySelector(sel);
-            } catch (e) { continue; }
+            try { nicknameEl = commentElement.querySelector(sel); } catch (e) { continue; }
             if (nicknameEl) break;
+        }
+
+        // 兜底：找 .NkS2Invn 内部第一个含文本的 span
+        if (!nicknameEl) {
+            const nkContainer = commentElement.querySelector('.NkS2Invn');
+            if (nkContainer) {
+                const spans = nkContainer.querySelectorAll('span');
+                for (const s of spans) {
+                    const txt = s.textContent.trim();
+                    if (txt.length >= 2 && txt.length <= 30 && !txt.startsWith('<')) {
+                        nicknameEl = s;
+                        break;
+                    }
+                }
+            }
         }
 
         if (!nicknameEl) return null;
 
-        const nickname = nicknameEl.textContent.replace('：', '').trim();
+        // 提取纯昵称（去掉尾部的冒号和空白）
+        let nickname = nicknameEl.textContent.replace(/[：:]\s*$/, '').trim();
 
-        // 先从缓存中查找 secUid（通过资料卡获取的）
-        let secUid = liveCommentUserCache.get(nickname) || null;
+        // 如果昵称还包含消息内容（兜底场景：nicknameEl拿到了整个消息外层），截取冒号前部分
+        const colonIdx = nickname.indexOf('：');
+        if (colonIdx === -1) {
+            const colonIdx2 = nickname.indexOf(':');
+            if (colonIdx2 > 0 && colonIdx2 < 20) {
+                nickname = nickname.substring(0, colonIdx2).trim();
+            }
+        } else if (colonIdx > 0 && colonIdx < 20) {
+            nickname = nickname.substring(0, colonIdx).trim();
+        }
 
-        let userId = null;
-        let targetUid = null;
-        let secTargetUid = null;
-        let webcastUid = null;
+        // 限制昵称长度合理性
+        if (nickname.length < 2 || nickname.length > 30) return null;
 
-        // 遍历评论元素及其父级元素，查找用户信息
-        let searchElement = commentElement;
-        for (let i = 0; i < 8 && searchElement; i++) {
-            const attrs = searchElement.attributes;
-            for (const attr of attrs) {
-                if (attr.name.startsWith('data-')) {
+        // 2. 先从WebSocket缓存中查找
+        let cached = liveCommentUserMap.get(nickname);
+        if (cached && cached.secUid) {
+            return { nickname: nickname, secUid: cached.secUid, userId: cached.userId };
+        }
+
+        // 3. 尝试React Fiber提取
+        const fiberResult = extractUserFromFiber(nicknameEl);
+        if (fiberResult && fiberResult.secUid) {
+            return fiberResult;
+        }
+
+        // 4. 尝试从data-*属性提取 sec_uid 模式
+        let walkEl = commentElement;
+        for (let i = 0; i < 12 && walkEl; i++) {
+            if (walkEl.attributes) {
+                for (const attr of walkEl.attributes) {
                     const val = attr.value || '';
-                    // 查找 sec_uid
-                    if ((attr.name.includes('sec') && attr.name.includes('uid')) || val.includes('MS4wLj')) {
-                        if (val.match(/MS4wLj[A-Za-z0-9_-]+/)) {
-                            secUid = secUid || val.match(/MS4wLj[A-Za-z0-9_-]+/)[0];
-                        }
-                    }
-                    // 查找 target_uid
-                    if (attr.name.includes('target') && attr.name.includes('uid')) {
-                        targetUid = val;
-                    }
-                    // 查找 webcast_uid (可能是 sec_target_uid)
-                    if (attr.name.includes('webcast') && attr.name.includes('uid')) {
-                        secTargetUid = val;
-                    }
-                    // 查找纯数字的 user_id
-                    if ((attr.name.includes('uid') || attr.name.includes('user')) && !attr.name.includes('sec') && /^\d+$/.test(val)) {
-                        userId = val;
-                    }
-                    // 查找 target_webcast_uid
-                    if (attr.name.includes('target_webcast')) {
-                        webcastUid = val;
+                    if (val.startsWith('MS4wLj') && val.length > 20) {
+                        return { nickname: nickname, secUid: val, userId: null };
                     }
                 }
             }
-            searchElement = searchElement.parentElement;
+            walkEl = walkEl.parentElement;
         }
 
-        if (!secUid && secTargetUid) {
-            secUid = secTargetUid;
-        }
-
-        return {
-            nickname: nickname,
-            secUid: secUid,
-            userId: userId,
-            targetUid: targetUid,
-            secTargetUid: secTargetUid,
-            webcastUid: webcastUid
-        };
+        // 5. 只有昵称，secUid等WS缓存或API异步补充
+        return { nickname: nickname, secUid: null, userId: null };
     }
 
-    // 通过 API 获取直播间评论用户的 secUid
-    async function fetchLiveCommentUserSecUid(targetUid, secTargetUid, webcastUid) {
-        if (!targetUid && !secTargetUid && !webcastUid) return null;
+    // 延迟获取secUid的异步包装
+    async function getLiveCommentSecUid(nickname) {
+        let cached = liveCommentUserMap.get(nickname);
+        if (cached && cached.secUid) return cached.secUid;
 
         const pageUrl = window.location.href;
         const anchorIdMatch = pageUrl.match(/anchor_id=(\d+)/);
-        const secAnchorIdMatch = pageUrl.match(/sec_anchor_id=([^&\s]+)/);
-        const roomIdMatch = pageUrl.match(/room_id=(\d+)/);
-
         if (!anchorIdMatch) return null;
 
         const anchorId = anchorIdMatch[1];
-        const secAnchorId = secAnchorIdMatch ? secAnchorIdMatch[1] : '';
-        const roomId = roomIdMatch ? roomIdMatch[1] : '';
-
-        let profileUrl = `https://live.douyin.com/webcast/user/profile/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=${window.screen.width}&screen_height=${window.screen.height}&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=${getBrowserVersion()}&os_name=Windows&os_version=10&anchor_id=${anchorId}&click_source=pc_pc_comment_user&msToken=${generateMsToken()}`;
-
-        if (secAnchorId) profileUrl += `&sec_anchor_id=${secAnchorId}`;
-        if (targetUid) profileUrl += `&target_uid=${targetUid}`;
-        if (secTargetUid) profileUrl += `&sec_target_uid=${secTargetUid}`;
-        if (webcastUid) profileUrl += `&target_webcast_uid=${webcastUid}`;
-        if (roomId) profileUrl += `&current_room_id=${roomId}`;
-
-        console.log('[抖音一键拉黑] 调用评论用户信息 API');
+        const profileUrl = `https://live.douyin.com/webcast/user/profile/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=${window.screen.width}&screen_height=${window.screen.height}&browser_language=${navigator.language||'zh-CN'}&browser_platform=${navigator.platform||'Win32'}&browser_name=${(()=>{const ua=navigator.userAgent;return ua.includes('Edg/')?'Edge':ua.includes('OPR/')||ua.includes('Opera')?'Opera':ua.includes('Chrome/')?'Chrome':ua.includes('Safari/')?'Safari':ua.includes('Firefox/')?'Firefox':'Chrome'})()}&browser_version=${getBrowserVersion()}&os_name=${(()=>{const ua=navigator.userAgent;return ua.includes('Windows')?'Windows':ua.includes('Mac OS')||ua.includes('Macintosh')?'Mac':ua.includes('Linux')?'Linux':'Windows'})()}&os_version=${(()=>{const ua=navigator.userAgent;const wm=ua.match(/Windows NT (\d+\.\d+)/);if(wm)return parseFloat(wm[1])>10?'11':'10';const mm=ua.match(/Mac OS X (\d+[._]\d+)/);if(mm)return mm[1].replace(/_/g,'.');return'10'})()}&anchor_id=${anchorId}&click_source=pc_pc_comment_user&msToken=${generateMsToken()}`;
 
         try {
             const response = await fetch(profileUrl, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                    'Accept-Language': navigator.language || 'zh-CN',
                     'Referer': pageUrl
                 },
                 credentials: 'include'
             });
-
             if (response.ok) {
                 const data = JSON.parse(await response.text());
                 if (data.data && data.data.user_profile && data.data.user_profile.base_info) {
-                    return data.data.user_profile.base_info.sec_uid;
+                    const secUid = data.data.user_profile.base_info.sec_uid;
+                    const uid = data.data.user_profile.base_info.uid;
+                    if (secUid) {
+                        liveCommentUserMap.set(nickname, { secUid: secUid, userId: uid || null });
+                        return secUid;
+                    }
                 }
             }
         } catch (e) {}
@@ -818,116 +1213,165 @@
         return null;
     }
 
-    // 直播间评论用户信息缓存（点击用户名弹出资料卡时获取）
-    const liveCommentUserCache = new Map();
-
-    // 监听直播间资料卡弹窗，获取用户 secUid
-    function setupLiveProfileObserver() {
-        const observer = new MutationObserver((mutations) => {
-            for (const mutation of mutations) {
-                for (const node of mutation.addedNodes) {
-                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
-
-                    // 查找资料卡弹窗（抖音直播间的用户资料卡）
-                    const profileCard = node.querySelector?.('[class*="profile-card"]') ||
-                                       node.querySelector?.('[class*="user-profile"]') ||
-                                       node.querySelector?.('[class*="card"]') ||
-                                       node.classList?.contains?.('profile-card') ||
-                                       node.classList?.contains?.('user-profile');
-
-                    if (profileCard) {
-                        console.log('[抖音拉黑] 检测到资料卡弹窗');
-                        // 等待弹窗内容加载
-                        setTimeout(() => extractUserInfoFromProfileCard(node), 500);
-                    }
-                }
-            }
-        });
-
-        observer.observe(document.body, { childList: true, subtree: true });
-        console.log('[抖音拉黑] 资料卡监听已启动');
+    // 判断推荐页卡片是否是直播卡片
+    function isLiveStreamCard(container) {
+        const avatarLink = container.querySelector('a[data-e2e="video-avatar"], a[href*="live.douyin.com"]');
+        if (!avatarLink) return false;
+        const href = avatarLink.getAttribute('href') || '';
+        if (href.includes('live.douyin.com')) return true;
+        const liveIcon = container.querySelector('.HoSMor44, img[alt="LiveIcon"], img[src*="avatar-live"]');
+        return !!liveIcon;
     }
 
-    // 从资料卡弹窗提取用户信息
-    function extractUserInfoFromProfileCard(cardElement) {
-        // 尝试从弹窗中获取 secUid
-        const secUidMatch = cardElement.innerHTML.match(/sec_uid["\s:]+["']?([^"'&\s]+)/) ||
-                           cardElement.innerHTML.match(/MS4wLj[A-Za-z0-9_-]+/);
-
-        if (secUidMatch) {
-            const secUid = secUidMatch[1] || secUidMatch[0];
-            console.log('[抖音拉黑] 从资料卡获取到 secUid:', secUid);
-
-            // 尝试获取昵称
-            const nicknameEl = cardElement.querySelector('[class*="nickname"]') ||
-                             cardElement.querySelector('[class*="name"]') ||
-                             cardElement.querySelector('span');
-            const nickname = nicknameEl?.textContent?.trim() || '';
-
-            // 存入缓存
-            if (nickname) {
-                liveCommentUserCache.set(nickname, secUid);
-            }
-        }
+    // 从直播卡片中提取 room_id
+    function extractRoomIdFromLiveCard(container) {
+        const avatarLink = container.querySelector('a[href*="live.douyin.com"]');
+        if (!avatarLink) return null;
+        const href = avatarLink.getAttribute('href') || '';
+        const roomIdMatch = href.match(/room_id=(\d+)/);
+        if (roomIdMatch) return roomIdMatch[1];
+        const pathMatch = href.match(/live\.douyin\.com\/(\d+)/);
+        if (pathMatch) return pathMatch[1];
+        return null;
     }
 
-    // 通过用户名搜索获取用户 secUid（用于直播间评论）
-    async function searchUserByNickname(nickname) {
-        if (!nickname) return null;
-
-        const pageUrl = window.location.href;
-        const cookies = document.cookie.split(';');
-        let msToken = generateMsToken();
-
-        for (const cookie of cookies) {
-            const [name, value] = cookie.trim().split('=');
-            if (name === 'msToken') msToken = value;
+    // 通过直播间 room_id 获取用户 sec_uid（调用 webcast/room/web/enter 接口）
+    async function fetchUserInfoFromLiveRoom(roomId) {
+        if (!roomId) {
+            console.log('[抖音一键拉黑] 直播房间ID为空，无法获取用户信息');
+            return null;
         }
 
-        const searchUrl = `https://www.douyin.com/aweme/v1/web/search/item/?aid=6383&app_name=douyin_web&channel=channel_pc_web&cookie_enabled=true&screen_width=1920&screen_height=1080&browser_language=zh-CN&browser_platform=Win32&browser_name=Chrome&browser_version=147.0.0.0&os_name=Windows&os_version=10&search_source=tab_search&query=${encodeURIComponent(nickname)}&search_channel=aweme_user_fans&enable_history=1&source=normal_search&items_count=10&msToken=${msToken}&a_bogus=`;
+        console.log('[抖音一键拉黑] 正在通过直播间ID获取用户信息:', roomId);
 
-        console.log('[抖音拉黑] 搜索用户:', nickname);
+        const msToken = generateMsToken();
+        const params = new URLSearchParams();
+        params.append('aid', '6383');
+        params.append('app_name', 'douyin_web');
+        params.append('live_id', '1');
+        params.append('device_platform', 'web');
+        params.append('language', 'zh-CN');
+        params.append('enter_from', 'web_homepage_hot');
+        params.append('cookie_enabled', 'true');
+        params.append('screen_width', String(window.screen.width));
+        params.append('screen_height', String(window.screen.height));
+        params.append('browser_language', navigator.language || 'zh-CN');
+        params.append('browser_platform', navigator.platform || 'Win32');
+        params.append('browser_name', (() => { const ua = navigator.userAgent; return ua.includes('Edg/') ? 'Edge' : ua.includes('OPR/') || ua.includes('Opera') ? 'Opera' : ua.includes('Chrome/') ? 'Chrome' : ua.includes('Safari/') ? 'Safari' : ua.includes('Firefox/') ? 'Firefox' : 'Chrome'; })());
+        params.append('browser_version', getBrowserVersion());
+        params.append('os_name', (() => { const ua = navigator.userAgent; return ua.includes('Windows') ? 'Windows' : ua.includes('Mac OS') || ua.includes('Macintosh') ? 'Mac' : ua.includes('Linux') ? 'Linux' : 'Windows'; })());
+        params.append('os_version', (() => { const ua = navigator.userAgent; const wm = ua.match(/Windows NT (\d+\.\d+)/); if (wm) return parseFloat(wm[1]) > 10 ? '11' : '10'; const mm = ua.match(/Mac OS X (\d+[._]\d+)/); if (mm) return mm[1].replace(/_/g, '.'); return '10'; })());
+        params.append('web_rid', roomId);
+        params.append('room_id_str', roomId);
+        params.append('enter_source', '');
+        params.append('is_need_double_stream', 'false');
+        params.append('insert_task_id', '');
+        params.append('live_reason', '');
+        params.append('msToken', msToken);
 
-        try {
-            const response = await fetch(searchUrl, {
+        const url = `https://live.douyin.com/webcast/room/web/enter/?${params.toString()}`;
+
+        return new Promise((resolve) => {
+            GM_xmlhttpRequest({
                 method: 'GET',
+                url: url,
                 headers: {
                     'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                    'Referer': pageUrl
+                    'Accept-Language': navigator.language || 'zh-CN',
+                    'Referer': 'https://www.douyin.com/',
+                    'Origin': 'https://www.douyin.com',
+                    'Cookie': document.cookie
                 },
-                credentials: 'include'
-            });
-
-            if (response.ok) {
-                const data = JSON.parse(await response.text());
-                console.log('[抖音拉黑] 搜索响应');
-
-                // 解析搜索结果获取用户 sec_uid
-                if (data.data && data.data.items) {
-                    for (const item of data.data.items) {
-                        if (item.user_info && item.user_info.sec_uid) {
-                            console.log('[抖音拉黑] 找到用户 sec_uid');
-                            return item.user_info.sec_uid;
-                        }
+                timeout: 10000,
+                onload: function(response) {
+                    console.log('[抖音一键拉黑] 直播间API响应状态:', response.status);
+                    if (response.status !== 200) {
+                        console.log('[抖音一键拉黑] 直播间API请求失败，状态码:', response.status);
+                        resolve(null);
+                        return;
                     }
-                }
-            }
-        } catch (e) {
-            console.log('[抖音一键拉黑] 搜索用户失败:', e);
-        }
 
-        return null;
+                    const text = response.responseText;
+                    let data;
+                    try {
+                        data = JSON.parse(text);
+                    } catch (parseErr) {
+                        console.log('[抖音一键拉黑] 直播间API返回非JSON数据:', text.substring(0, 200));
+                        resolve(null);
+                        return;
+                    }
+
+                    if (data.status_code !== 0) {
+                        console.log('[抖音一键拉黑] 直播间API返回错误，status_code:', data.status_code, 'status_msg:', data.status_msg);
+                        resolve(null);
+                        return;
+                    }
+
+                    if (data.data && data.data.user) {
+                        const user = data.data.user;
+                        const result = {
+                            secUid: user.sec_uid,
+                            userId: user.id_str,
+                            nickname: user.nickname
+                        };
+                        console.log('[抖音一键拉黑] 从直播间API获取到用户信息:', result);
+                        resolve(result);
+                        return;
+                    }
+
+                    console.log('[抖音一键拉黑] 直播间API返回数据中无用户信息:', JSON.stringify(data).substring(0, 300));
+                    resolve(null);
+                },
+                onerror: function(error) {
+                    console.log('[抖音一键拉黑] 直播间API请求网络错误:', error);
+                    resolve(null);
+                },
+                ontimeout: function() {
+                    console.log('[抖音一键拉黑] 直播间API请求超时');
+                    resolve(null);
+                }
+            });
+        });
     }
 
     // 获取设备参数
     function getDeviceParams() {
+        const ua = navigator.userAgent;
+
+        let browserName = 'Chrome';
+        if (ua.includes('Edg/')) browserName = 'Edge';
+        else if (ua.includes('OPR/') || ua.includes('Opera')) browserName = 'Opera';
+        else if (ua.includes('Chrome/')) browserName = 'Chrome';
+        else if (ua.includes('Safari/')) browserName = 'Safari';
+        else if (ua.includes('Firefox/')) browserName = 'Firefox';
+
+        let osName = 'Windows';
+        if (ua.includes('Windows')) osName = 'Windows';
+        else if (ua.includes('Mac OS') || ua.includes('Macintosh')) osName = 'Mac';
+        else if (ua.includes('Linux') && !ua.includes('Android')) osName = 'Linux';
+        else if (ua.includes('Android')) osName = 'Android';
+        else if (ua.includes('iPhone') || ua.includes('iPad')) osName = 'iOS';
+
+        let osVersion = '10';
+        const winMatch = ua.match(/Windows NT (\d+\.\d+)/);
+        if (winMatch) {
+            const ver = parseFloat(winMatch[1]);
+            osVersion = ver > 10 ? '11' : '10';
+        } else {
+            const macMatch = ua.match(/Mac OS X (\d+[._]\d+)/);
+            if (macMatch) osVersion = macMatch[1].replace(/_/g, '.');
+            else {
+                const androidMatch = ua.match(/Android (\d+(?:\.\d+)*)/);
+                if (androidMatch) osVersion = androidMatch[1];
+            }
+        }
+
         return {
             device_platform: 'webapp',
             aid: '6383',
             channel: 'channel_pc_web',
             pc_client_type: '1',
-            pc_libra_divert: 'Windows',
+            pc_libra_divert: (() => { const ua = navigator.userAgent; return ua.includes('Windows') ? 'Windows' : ua.includes('Mac') ? 'Mac' : 'Linux'; })(),
             update_version_code: '170400',
             support_h265: '1',
             support_dash: '1',
@@ -937,28 +1381,36 @@
             screen_width: String(window.screen.width),
             screen_height: String(window.screen.height),
             browser_language: navigator.language || 'zh-CN',
-            browser_platform: 'Win32',
-            browser_name: 'Chrome',
+            browser_platform: navigator.platform || 'Win32',
+            browser_name: browserName,
             browser_version: getBrowserVersion(),
             browser_online: String(navigator.onLine),
             engine_name: 'Blink',
             engine_version: getBrowserVersion(),
-            os_name: 'Windows',
-            os_version: '10',
+            os_name: osName,
+            os_version: osVersion,
             cpu_core_num: String(navigator.hardwareConcurrency || 4),
             device_memory: String(Math.ceil((navigator.deviceMemory || 4))),
             platform: 'PC',
-            downlink: '10',
-            effective_type: '4g',
-            round_trip_time: '0'
+            downlink: String((navigator.connection && navigator.connection.downlink) || 10),
+            effective_type: (navigator.connection && navigator.connection.effectiveType) || '4g',
+            round_trip_time: String((navigator.connection && navigator.connection.rtt) || 0)
         };
     }
 
-    // 获取浏览器版本
     function getBrowserVersion() {
         const ua = navigator.userAgent;
-        const match = ua.match(/Chrome\/(\d+)/);
-        return match ? match[1] + '.0.0.0' : '147.0.0.0';
+        let match = ua.match(/Edg\/(\d+)/);
+        if (match) return match[1] + '.0.0.0';
+        match = ua.match(/OPR\/(\d+)/);
+        if (match) return match[1] + '.0.0.0';
+        match = ua.match(/Chrome\/(\d+)/);
+        if (match) return match[1] + '.0.0.0';
+        match = ua.match(/Firefox\/(\d+)/);
+        if (match) return match[1] + '.0.0.0';
+        match = ua.match(/Version\/(\d+)/);
+        if (match) return match[1] + '.0.0.0';
+        return '147.0.0.0';
     }
 
     // 获取抖音的签名参数
@@ -1043,9 +1495,9 @@
         return new Promise((resolve, reject) => {
             const win = unsafeWindow || window;
             const xhr = new win.XMLHttpRequest();
-            
+
             console.log('[抖音一键拉黑] 尝试使用页面 XHR');
-            
+
             // 构建表单数据（按照接口.txt中的格式）
             const formData = new win.FormData();
             formData.append('block_type', options.blockType || '0');
@@ -1054,17 +1506,17 @@
             if (options.userId) {
                 formData.append('user_id', options.userId);
             }
-            
+
             xhr.open('POST', url, true);
             xhr.withCredentials = true;
-            
+
             // 设置请求头
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
             xhr.setRequestHeader('Accept', 'application/json, text/plain, */*');
-            xhr.setRequestHeader('Accept-Language', 'zh-CN,zh;q=0.9,en;q=0.8');
+            xhr.setRequestHeader('Accept-Language', navigator.language || 'zh-CN');
             xhr.setRequestHeader('Origin', 'https://www.douyin.com');
             xhr.setRequestHeader('Referer', 'https://www.douyin.com/');
-            
+
             xhr.onload = function() {
                 console.log('[抖音一键拉黑] XHR 响应状态:', xhr.status);
                 resolve({
@@ -1072,12 +1524,12 @@
                     responseText: xhr.responseText
                 });
             };
-            
+
             xhr.onerror = function() {
                 console.log('[抖音一键拉黑] XHR 请求失败');
                 reject(new Error('XHR request failed'));
             };
-            
+
             // 将 FormData 转换为 URL 编码字符串
             // 注意：根据接口.txt，block_type=1 表示拉黑，block_type=0 表示解除拉黑
             const params = new URLSearchParams();
@@ -1090,7 +1542,7 @@
             if (options.userId) {
                 params.append('user_id', options.userId);
             }
-            
+
             console.log('[抖音一键拉黑] XHR 请求体:', params.toString());
             xhr.send(params.toString());
         });
@@ -1101,21 +1553,21 @@
         return new Promise((resolve) => {
             try {
                 const win = unsafeWindow || window;
-                
+
                 // 尝试通过 webpack 获取抖音的请求模块
                 if (win.webpackChunkdouyin_web) {
                     console.log('[抖音一键拉黑] 尝试通过 webpack 获取请求模块');
-                    
+
                     // 尝试获取模块
                     let requestModule = null;
-                    
+
                     // 遍历 webpack chunk 寻找请求相关的模块
                     win.webpackChunkdouyin_web.forEach((chunk) => {
                         chunk[1].forEach((module, id) => {
                             try {
                                 const moduleStr = module.toString();
                                 // 查找包含请求逻辑的模块
-                                if (moduleStr.includes('/aweme/v1/') || 
+                                if (moduleStr.includes('/aweme/v1/') ||
                                     moduleStr.includes('user/block') ||
                                     moduleStr.includes('axios') ||
                                     moduleStr.includes('fetch')) {
@@ -1125,7 +1577,7 @@
                         });
                     });
                 }
-                
+
                 resolve({ success: false });
             } catch (error) {
                 console.error('[抖音一键拉黑] 使用抖音模块失败:', error);
@@ -1139,7 +1591,7 @@
         return new Promise((resolve) => {
             try {
                 const win = unsafeWindow || window;
-                
+
                 // 查找页面中的请求模块
                 if (win.webpackChunkdouyin_web) {
                     console.log('[抖音一键拉黑] 找到 webpackChunkdouyin_web');
@@ -1147,11 +1599,11 @@
 
                 // 尝试调用页面的签名函数
                 let signedUrl = null;
-                
+
                 // 方法1: 尝试调用 _byted_acrawler.signUrl
                 if (win._byted_acrawler) {
                     console.log('[抖音一键拉黑] 找到 _byted_acrawler');
-                    
+
                     if (typeof win._byted_acrawler.signUrl === 'function') {
                         try {
                             const baseUrl = `/aweme/v1/web/user/block/?sec_user_id=${secUid}&block_type=${blockType}&source=0`;
@@ -1161,7 +1613,7 @@
                             console.log('[抖音一键拉黑] signUrl 调用失败:', e);
                         }
                     }
-                    
+
                     // 尝试其他签名方法
                     if (!signedUrl && typeof win._byted_acrawler.sign === 'function') {
                         try {
@@ -1212,7 +1664,7 @@
         const headers = {
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             'Accept': 'application/json, text/plain, */*',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Language': navigator.language || 'zh-CN',
             'X-Requested-With': 'XMLHttpRequest'
         };
 
@@ -1226,7 +1678,7 @@
     }
 
     // 执行拉黑操作
-    async function blockUser(secUid, isUnblock = false) {
+    async function blockUser(secUid, isUnblock = false, silent = false) {
         try {
             console.log('[抖音拉黑] 开始' + (isUnblock ? '解除' : '拉黑') + ':', secUid);
 
@@ -1234,7 +1686,7 @@
 
             // 首先尝试使用页面内部方法
             const pageMethodResult = await blockUserWithPageMethod(secUid, blockType);
-            
+
             // 获取签名参数
             const signParams = getSignParams();
             console.log('[抖音拉黑] 签名参数');
@@ -1243,7 +1695,7 @@
             // 注意：实际的拉黑请求使用的是 www-hj.douyin.com 域名
             let url = 'https://www-hj.douyin.com/aweme/v1/web/user/block/?';
             const urlParams = new URLSearchParams();
-            
+
             // 从 cookie 获取必要的参数
             const cookies = document.cookie.split(';');
             let webid = '', uifid = '', fp = '';
@@ -1256,27 +1708,27 @@
                 if (name === 'UIFID') uifid = value;
                 if (name === 's_v_web_id') { webid = value; fp = value; }
             }
-            
+
             // 添加设备参数（动态获取）
             const deviceParams = getDeviceParams();
             for (const [key, value] of Object.entries(deviceParams)) {
                 urlParams.append(key, value);
             }
-            
+
             // 添加用户相关参数
             if (webid) urlParams.append('webid', webid);
             if (uifid) urlParams.append('uifid', uifid);
-            
+
             // 添加 msToken
             const msToken = signParams.msToken || generateMsToken();
             urlParams.append('msToken', msToken);
-            
+
             // 添加指纹参数
             if (fp) {
                 urlParams.append('verifyFp', fp);
                 urlParams.append('fp', fp);
             }
-            
+
             // 注意：业务参数（sec_user_id, block_type, source, user_id）会在 Form Data 中发送
             // 不再添加到 URL 参数中
 
@@ -1304,9 +1756,9 @@
                         isUnblock: isUnblock
                     });
                     console.log('[抖音一键拉黑] 页面 XHR 结果:', xhrResult);
-                    
+
                     if (xhrResult.status !== 403) {
-                        handleResponse(xhrResult.responseText, isUnblock, resolve);
+                        handleResponse(xhrResult.responseText, isUnblock, resolve, silent);
                         return;
                     }
                 } catch (xhrError) {
@@ -1331,17 +1783,17 @@
                     })
                     .then(text => {
                         console.log('[抖音一键拉黑] fetch 响应内容:', text);
-                        handleResponse(text, isUnblock, resolve);
+                        handleResponse(text, isUnblock, resolve, silent);
                     })
                     .catch(error => {
                         console.log('[抖音一键拉黑] fetch 失败，使用 GM_xmlhttpRequest:', error);
-                        
+
                         // 方法3: 使用 GM_xmlhttpRequest 作为备选
                         // 构建请求体
                         const actualBlockType = isUnblock ? 0 : 1;
                         const gmData = `block_type=${actualBlockType}&sec_user_id=${encodeURIComponent(secUid)}&source=0${signParams.userId ? '&user_id=' + signParams.userId : ''}`;
                         console.log('[抖音一键拉黑] GM 请求体:', gmData);
-                        
+
                         GM_xmlhttpRequest({
                             method: 'POST',
                             url: url,
@@ -1357,21 +1809,21 @@
                                 console.log('[抖音一键拉黑] GM 响应内容:', response.responseText);
 
                                 if (response.status === 403) {
-                                    showToast('请求被拒绝，请确保已登录抖音');
+                                    if (!silent) showToast('请求被拒绝，请确保已登录抖音');
                                     resolve({ success: false, error: '403 Forbidden - 需要登录' });
                                     return;
                                 }
 
-                                handleResponse(response.responseText, isUnblock, resolve);
+                                handleResponse(response.responseText, isUnblock, resolve, silent);
                             },
                             onerror: function(error) {
                                 console.error('[抖音一键拉黑] 请求失败:', error);
-                                showToast('网络错误，请稍后重试');
+                                if (!silent) showToast('网络错误，请稍后重试');
                                 resolve({ success: false, error: '网络错误' });
                             },
                             ontimeout: function() {
                                 console.error('[抖音一键拉黑] 请求超时');
-                                showToast('请求超时，请稍后重试');
+                                if (!silent) showToast('请求超时，请稍后重试');
                                 resolve({ success: false, error: '超时' });
                             }
                         });
@@ -1379,15 +1831,15 @@
             });
         } catch (error) {
             console.error('[抖音一键拉黑] 异常:', error);
-            showToast('操作失败，请重试');
+            if (!silent) showToast('操作失败，请重试');
             return { success: false, error: error.message };
         }
     }
 
     // 处理响应数据
-    function handleResponse(responseText, isUnblock, resolve) {
+    function handleResponse(responseText, isUnblock, resolve, silent = false) {
         if (!responseText) {
-            showToast('服务器返回空响应');
+            if (!silent) showToast('服务器返回空响应');
             resolve({ success: false, isBlocked: undefined, error: 'Empty response' });
             return;
         }
@@ -1404,31 +1856,31 @@
                 if (isUnblock) {
                     // 解除拉黑操作
                     if (data.block_status === 0) {
-                        showToast('已解除拉黑');
+                        if (!silent) showToast('已解除拉黑');
                         resolve({ success: true, isBlocked: false });
                     } else {
-                        showToast('解除拉黑失败');
+                        if (!silent) showToast('解除拉黑失败');
                         resolve({ success: false, isBlocked: true, error: '解除拉黑失败' });
                     }
                 } else {
                     // 拉黑操作
                     if (data.block_status === 1) {
-                        showToast('已拉黑该用户');
+                        if (!silent) showToast('已拉黑该用户');
                         resolve({ success: true, isBlocked: true });
                     } else {
-                        showToast('拉黑失败');
+                        if (!silent) showToast('拉黑失败');
                         resolve({ success: false, isBlocked: false, error: '拉黑失败' });
                     }
                 }
             } else {
                 const errorMsg = data.status_msg || '操作失败';
-                showToast(errorMsg);
+                if (!silent) showToast(errorMsg);
                 // 根据操作类型返回预期的isBlocked状态
                 resolve({ success: false, isBlocked: isUnblock ? undefined : undefined, error: errorMsg });
             }
         } catch (e) {
             console.error('[抖音一键拉黑] 解析响应失败:', e);
-            showToast('操作失败，请重试');
+            if (!silent) showToast('操作失败，请重试');
             resolve({ success: false, isBlocked: undefined, error: '解析失败' });
         }
     }
@@ -1465,7 +1917,7 @@
         btn.addEventListener('mouseleave', preventEventBubbling, true);
         btn.addEventListener('mouseover', preventEventBubbling, true);
         btn.addEventListener('mouseout', preventEventBubbling, true);
-        
+
         // 额外阻止 pointer 事件
         btn.addEventListener('pointerenter', preventEventBubbling, true);
         btn.addEventListener('pointerleave', preventEventBubbling, true);
@@ -1477,8 +1929,53 @@
             e.stopPropagation();
             e.stopImmediatePropagation();
 
-            const authorInfo = getVideoAuthorInfoFromContainer(container);
-            if (!authorInfo || !authorInfo.secUid) {
+            let secUid = null;
+            const liveRoomId = btn.getAttribute('data-live-room-id');
+
+            // 如果是直播卡片，先通过直播间API获取用户sec_uid
+            if (liveRoomId) {
+                console.log('[抖音一键拉黑] 直播卡片，正在获取用户信息...');
+                showToast('正在获取直播用户信息...');
+                const liveUserInfo = await fetchUserInfoFromLiveRoom(liveRoomId);
+                if (liveUserInfo && liveUserInfo.secUid) {
+                    secUid = liveUserInfo.secUid;
+                    console.log('[抖音一键拉黑] 直播卡片获取到secUid:', secUid);
+                }
+            }
+
+            // 如果不是直播卡片或直播API未能获取，尝试从容器获取
+            if (!secUid) {
+                const authorInfo = getVideoAuthorInfoFromContainer(container);
+                if (authorInfo && authorInfo.secUid) {
+                    secUid = authorInfo.secUid;
+                }
+            }
+
+            // 最终兜底：如果是直播卡片，从 feed-item 层级直接搜索用户链接
+            if (!secUid && liveRoomId) {
+                console.log('[抖音一键拉黑] 直播卡片兜底搜索用户链接...');
+                let feedItem = container;
+                for (let i = 0; i < 10 && feedItem; i++) {
+                    if (feedItem.hasAttribute('data-e2e') && feedItem.getAttribute('data-e2e') === 'feed-item') {
+                        break;
+                    }
+                    feedItem = feedItem.parentElement;
+                }
+                if (feedItem) {
+                    const allLinks = feedItem.querySelectorAll('a');
+                    for (const link of allLinks) {
+                        const href = link.getAttribute('href') || '';
+                        const secUidMatch = href.match(/MS4wLj[A-Za-z0-9_\-]{15,}/);
+                        if (secUidMatch) {
+                            secUid = secUidMatch[0];
+                            console.log('[抖音一键拉黑] 直播卡片兜底提取到sec_uid:', secUid);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!secUid) {
                 showToast('无法获取用户信息');
                 return;
             }
@@ -1486,18 +1983,25 @@
             btn.style.pointerEvents = 'none';
             const isCurrentlyBlocked = btn.dataset.blocked === 'true';
             console.log('[抖音一键拉黑] 当前拉黑状态:', isCurrentlyBlocked, '准备执行:', isCurrentlyBlocked ? '解除拉黑' : '拉黑');
-            
-            const result = await blockUser(authorInfo.secUid, isCurrentlyBlocked);
+
+            const result = await blockUser(secUid, isCurrentlyBlocked);
             console.log('[抖音一键拉黑] 拉黑操作结果:', result);
 
             if (result && result.success) {
                 const tooltipText = btn.querySelector('.block-tooltip-text');
                 console.log('[抖音一键拉黑] 操作成功，新的拉黑状态:', result.isBlocked);
-                
+
                 if (result.isBlocked === true) {
                     btn.dataset.blocked = 'true';
                     btn.classList.add('blocked');
                     if (tooltipText) tooltipText.textContent = '已拉黑';
+                    // 记录到拉黑日志（推荐页视频/直播卡片）
+                    try {
+                        recordBlockedUser(enrichAuthorInfo({
+                            secUid: secUid,
+                            nickname: '' // 推荐页卡片通常没有显式昵称
+                        }), 'feed-card');
+                    } catch (e) {}
                     console.log('[抖音一键拉黑] 按钮状态已更新为: 已拉黑');
                 } else if (result.isBlocked === false) {
                     btn.dataset.blocked = 'false';
@@ -1540,15 +2044,16 @@
 
         console.log('[抖音一键拉黑] 开始为互动区域插入按钮...');
 
-        // 步骤1：查找头像链接（使用 data-e2e="video-avatar" 或包含 /user/ 的链接）
-        // 优先使用 data-e2e="video-avatar"，如果不存在则查找包含 /user/ 的链接
+        // 步骤1：查找头像链接（使用 data-e2e="video-avatar" 或包含 /user/ 的链接，也支持直播链接）
         let avatarLink = interactionArea.querySelector('a[data-e2e="video-avatar"]');
+        let isLiveCard = false;
+        let liveRoomId = null;
+
         if (!avatarLink) {
             // 查找包含用户主页链接的 a 标签
             const allLinks = interactionArea.querySelectorAll('a[href*="/user/"]');
             for (const link of allLinks) {
                 const href = link.getAttribute('href') || '';
-                // 确保链接包含有效的用户标识（MS4wLj 是抖音用户 secUid 的特征前缀）
                 if (href.includes('MS4wLj') || href.match(/\/user\/[^\/\s?]+/)) {
                     avatarLink = link;
                     break;
@@ -1556,20 +2061,66 @@
             }
         }
 
-        // 如果没有找到头像链接或链接中没有用户标识，终止操作
+        // 如果仍然没找到，检查是否是直播卡片（链接指向 live.douyin.com）
+        if (!avatarLink) {
+            const liveLinks = interactionArea.querySelectorAll('a[href*="live.douyin.com"]');
+            for (const link of liveLinks) {
+                const href = link.getAttribute('href') || '';
+                const roomIdMatch = href.match(/room_id=(\d+)/);
+                if (roomIdMatch) {
+                    avatarLink = link;
+                    isLiveCard = true;
+                    liveRoomId = roomIdMatch[1];
+                    console.log('[抖音一键拉黑] 检测到直播卡片，room_id:', liveRoomId);
+                    break;
+                }
+                const pathMatch = href.match(/live\.douyin\.com\/(\d+)/);
+                if (pathMatch) {
+                    avatarLink = link;
+                    isLiveCard = true;
+                    liveRoomId = pathMatch[1];
+                    console.log('[抖音一键拉黑] 检测到直播卡片，room_id(从路径):', liveRoomId);
+                    break;
+                }
+            }
+            if (!avatarLink) {
+                const liveIcons = interactionArea.querySelectorAll('.HoSMor44, img[alt="LiveIcon"], img[src*="avatar-live"]');
+                if (liveIcons.length > 0) {
+                    const anyLink = interactionArea.querySelector('a');
+                    if (anyLink) {
+                        const href = anyLink.getAttribute('href') || '';
+                        if (href.includes('live.douyin.com')) {
+                            const roomIdMatch = href.match(/room_id=(\d+)/);
+                            if (roomIdMatch) {
+                                avatarLink = anyLink;
+                                isLiveCard = true;
+                                liveRoomId = roomIdMatch[1];
+                                console.log('[抖音一键拉黑] 通过直播图标检测到直播卡片，room_id:', liveRoomId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 如果没有找到头像链接，终止操作
         if (!avatarLink) {
             console.log('[抖音一键拉黑] 未找到有效的用户主页链接，跳过此卡片');
             return false;
         }
 
         const href = avatarLink.getAttribute('href') || '';
-        const secUidMatch = href.match(/\/user\/([^?\s]+)/);
-        if (!secUidMatch || !secUidMatch[1]) {
-            console.log('[抖音一键拉黑] 无法从链接中提取用户标识，跳过');
-            return false;
+
+        // 对于直播卡片，跳过 secUid 校验（将在点击时异步获取）
+        if (!isLiveCard) {
+            const secUidMatch = href.match(/\/user\/([^?\s]+)/);
+            if (!secUidMatch || !secUidMatch[1]) {
+                console.log('[抖音一键拉黑] 无法从链接中提取用户标识，跳过');
+                return false;
+            }
         }
 
-        console.log('[抖音一键拉黑] 找到用户链接:', href);
+        console.log('[抖音一键拉黑] 找到用户链接:', href, isLiveCard ? '(直播卡片)' : '');
 
         // 步骤2：从头像链接向上遍历，找到关注图标容器（data-e2e="feed-follow-icon" 的祖先）
         // 该元素即为头像及关注按钮的外层容器
@@ -1631,6 +2182,10 @@
 
         // 步骤5：创建新按钮元素
         const blockBtn = createBlockButton(interactionArea);
+        if (isLiveCard && liveRoomId) {
+            blockBtn.setAttribute('data-live-room-id', liveRoomId);
+            interactionArea.setAttribute('data-live-room-id', liveRoomId);
+        }
 
         // 为按钮打上自定义属性，避免重复插入
         blockBtn.setAttribute('data-custom-inserted', 'block-btn');
@@ -1670,7 +2225,7 @@
 
         const blockBtn = createCommentBlockButton(commentItem, commentInfo);
         const inserted = insertButtonToCommentItem(commentItem, blockBtn);
-        
+
         if (inserted) {
             console.log('[抖音一键拉黑] 评论区按钮插入成功');
             return true;
@@ -1809,7 +2364,7 @@
     // 获取评论区作者信息 - 增强版（360浏览器兼容性优化）
     function getCommentAuthorInfo(commentItem) {
         console.log('[抖音一键拉黑] 开始获取评论作者信息...');
-        
+
         // 尝试多种选择器查找用户链接
         const userLinkSelectors = [
             // 高优先级选择器
@@ -1832,7 +2387,7 @@
 
         let authorLink = null;
         let usedSelector = '';
-        
+
         // 第一层：在当前元素内查找
         for (const selector of userLinkSelectors) {
             try {
@@ -1883,13 +2438,13 @@
         // 第四层：从data属性中获取
         if (!authorLink) {
             // 尝试从data属性获取secUid
-            const dataSecUid = commentItem.getAttribute('data-sec-uid') || 
+            const dataSecUid = commentItem.getAttribute('data-sec-uid') ||
                               commentItem.getAttribute('data-user-sec-uid');
             if (dataSecUid && dataSecUid.includes('MS4wLj')) {
                 console.log('[抖音一键拉黑] 从data属性获取到secUid:', dataSecUid);
                 return { secUid: dataSecUid };
             }
-            
+
             // 查找子元素中的data属性
             const elementsWithData = commentItem.querySelectorAll('[data-sec-uid], [data-user-sec-uid]');
             for (const el of elementsWithData) {
@@ -1905,16 +2460,16 @@
         if (authorLink) {
             const href = authorLink.getAttribute('href') || '';
             console.log('[抖音一键拉黑] 用户链接href:', href);
-            
+
             // 尝试多种方式提取secUid
             let secUid = null;
-            
+
             // 方式1：标准匹配 /user/xxx
             const match = href.match(/\/user\/([^?\s]+)/);
             if (match) {
                 secUid = match[1];
             }
-            
+
             // 方式2：直接匹配MS4wLj开头的secUid
             if (!secUid) {
                 const msMatch = href.match(/(MS4wLj[A-Za-z0-9_-]+)/);
@@ -1922,7 +2477,7 @@
                     secUid = msMatch[1];
                 }
             }
-            
+
             if (secUid) {
                 const result = { secUid: secUid };
 
@@ -1937,11 +2492,31 @@
                 if (userIdAttr) {
                     result.userId = userIdAttr.getAttribute('data-user-id');
                 }
-                
+
                 // 从当前元素获取userId
                 if (!result.userId) {
                     result.userId = commentItem.getAttribute('data-user-id');
                 }
+
+                // 标记是否为视频作者
+                try {
+                    const authorSec = batchBlockState.authorSecUid || getCurrentVideoAuthorSecUid();
+                    if (authorSec && authorSec === secUid) {
+                        result.isAuthor = true;
+                    }
+                } catch (e) {}
+
+                // 顺手提取昵称和头像（用于拉黑日志）
+                try {
+                    const nickEl = authorLink.querySelector('span') || authorLink;
+                    if (nickEl && nickEl.textContent) {
+                        result.nickname = (nickEl.textContent || '').trim().split(/\s/)[0] || '';
+                    }
+                    const avatarImg = commentItem.querySelector('img[class*="avatar"], img[alt*="头像"], img[class*="Avatar"]');
+                    if (avatarImg && avatarImg.src) {
+                        result.avatar = avatarImg.src;
+                    }
+                } catch (e) {}
 
                 console.log('[抖音一键拉黑] 成功获取评论作者信息:', result);
                 return result;
@@ -1951,7 +2526,7 @@
         } else {
             console.log('[抖音一键拉黑] 未找到用户链接，评论HTML:', commentItem.innerHTML.substring(0, 300));
         }
-        
+
         // 最后一层：尝试从页面全局数据获取
         try {
             const win = unsafeWindow || window;
@@ -1964,7 +2539,7 @@
                 }
             }
         } catch (e) {}
-        
+
         return null;
     }
 
@@ -1973,6 +2548,11 @@
         const btn = document.createElement('div');
         btn.className = 'douyin-comment-block-btn';
         btn.dataset.blocked = 'false';
+        btn.dataset.secUid = authorInfo.secUid || ''; // 存储secUid供批量模式使用
+        // 视频作者评论标识：批量模式下跳过、停止后单独拉黑
+        if (authorInfo.isAuthor) {
+            btn.dataset.authorComment = 'true';
+        }
         btn.title = '拉黑用户';
         btn.innerHTML = `
             <div class="block-icon">
@@ -1980,7 +2560,7 @@
             </div>
         `;
 
-        btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
 
@@ -1992,23 +2572,40 @@
             btn.style.pointerEvents = 'none';
             const isCurrentlyBlocked = btn.dataset.blocked === 'true';
             console.log('[抖音一键拉黑] 评论区按钮 - 当前拉黑状态:', isCurrentlyBlocked, '准备执行:', isCurrentlyBlocked ? '解除拉黑' : '拉黑');
-            
+
             const result = await blockUser(authorInfo.secUid, isCurrentlyBlocked);
             console.log('[抖音一键拉黑] 评论区拉黑操作结果:', result);
 
             if (result && result.success) {
                 console.log('[抖音一键拉黑] 评论区操作成功，新的拉黑状态:', result.isBlocked);
-                
+
                 if (result.isBlocked === true) {
-                    btn.dataset.blocked = 'true';
-                    btn.classList.add('blocked');
-                    btn.title = '已拉黑';
+                    markCommentBtnBlocked(btn);
                     showToast('已拉黑该用户');
+                    // 拉黑后自动触发"不感兴趣"（仅对评论，且开关打开）—— 已注释：功能不完善
+                    // 记录到拉黑日志
+                    try {
+                        const info = enrichAuthorInfo({
+                            secUid: authorInfo.secUid,
+                            userId: authorInfo.userId,
+                            nickname: extractNicknameFromBtn(btn) || authorInfo.nickname,
+                            avatar: extractAvatarFromBtn(btn) || authorInfo.avatar
+                        });
+                        recordBlockedUser(info, isCurrentlyBlocked ? 'manual-unblock' : 'manual');
+                    } catch (e) {}
                     console.log('[抖音一键拉黑] 评论区按钮状态已更新为: 已拉黑');
                 } else if (result.isBlocked === false) {
                     btn.dataset.blocked = 'false';
                     btn.classList.remove('blocked');
                     btn.title = '拉黑用户';
+                    // 重置 SVG 填充色
+                    try {
+                        const svg = btn.querySelector('svg');
+                        if (svg) {
+                            const path = svg.querySelector('path');
+                            if (path) path.setAttribute('fill', '#ffffff');
+                        }
+                    } catch (e) {}
                     showToast('已解除拉黑');
                     console.log('[抖音一键拉黑] 评论区按钮状态已更新为: 未拉黑');
                 } else {
@@ -2022,6 +2619,12 @@
                 btn.style.pointerEvents = 'auto';
             }, 1000);
         });
+
+        // 记录批量/作者收尾拉黑时的用户信息
+        if (authorInfo && authorInfo.secUid) {
+            btn.dataset.nickname = authorInfo.nickname || '';
+            btn.dataset.avatar = authorInfo.avatar || '';
+        }
 
         btn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -2045,6 +2648,26 @@
                 }
             });
         }
+    }
+
+    // 从评论区按钮反向提取昵称/头像
+    function extractNicknameFromBtn(btn) {
+        if (!btn) return '';
+        const item = btn.closest('[data-e2e="comment-item"], .comment-item');
+        if (item) {
+            const nickEl = item.querySelector('[data-e2e="comment-username"], .comment-username, a[href*="/user/"] span');
+            if (nickEl) return (nickEl.textContent || '').trim();
+        }
+        return btn.dataset.nickname || '';
+    }
+    function extractAvatarFromBtn(btn) {
+        if (!btn) return '';
+        const item = btn.closest('[data-e2e="comment-item"], .comment-item');
+        if (item) {
+            const img = item.querySelector('img[class*="avatar"], img[class*="Avatar"], img[alt*="头像"]');
+            if (img) return img.src || '';
+        }
+        return btn.dataset.avatar || '';
     }
 
     // 为所有互动区域插入按钮 - 重构版（基于 data-e2e 和 DOM 结构）
@@ -2182,6 +2805,69 @@
             }
         }
 
+        // 方法4：查找直播卡片（推荐页中"正在直播"的用户卡片）
+        if (allInteractionAreas.length === 0) {
+            console.log('[抖音一键拉黑] 尝试通过直播卡片查找互动区域...');
+            const liveLinks = document.querySelectorAll('a[href*="live.douyin.com"]');
+            for (const link of liveLinks) {
+                const href = link.getAttribute('href') || '';
+                if (!href.includes('room_id=') && !href.match(/live\.douyin\.com\/\d+/)) continue;
+
+                let currentEl = link;
+                for (let i = 0; i < 10 && currentEl; i++) {
+                    currentEl = currentEl.parentElement;
+                    if (!currentEl) break;
+
+                    const followIcon = currentEl.querySelector('[data-e2e="feed-follow-icon"]');
+                    if (followIcon) {
+                        const avatarContainer = currentEl.parentElement;
+                        if (avatarContainer) {
+                            const panel = avatarContainer.parentElement;
+                            if (panel && !allInteractionAreas.includes(panel)) {
+                                const diggIcon = panel.querySelector('[data-e2e="video-player-digg"]');
+                                if (diggIcon) {
+                                    allInteractionAreas.push(panel);
+                                    console.log('[抖音一键拉黑] 找到直播卡片互动区域');
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 方法4也不限制 allInteractionAreas.length === 0，补充未覆盖的直播卡片
+        {
+            const liveLinks = document.querySelectorAll('a[href*="live.douyin.com"]');
+            for (const link of liveLinks) {
+                const href = link.getAttribute('href') || '';
+                if (!href.includes('room_id=') && !href.match(/live\.douyin\.com\/\d+/)) continue;
+
+                let currentEl = link;
+                for (let i = 0; i < 10 && currentEl; i++) {
+                    currentEl = currentEl.parentElement;
+                    if (!currentEl) break;
+
+                    const followIcon = currentEl.querySelector('[data-e2e="feed-follow-icon"]');
+                    if (followIcon) {
+                        const avatarContainer = currentEl.parentElement;
+                        if (avatarContainer) {
+                            const panel = avatarContainer.parentElement;
+                            if (panel && !allInteractionAreas.includes(panel)) {
+                                const diggIcon = panel.querySelector('[data-e2e="video-player-digg"]');
+                                if (diggIcon) {
+                                    allInteractionAreas.push(panel);
+                                    console.log('[抖音一键拉黑] 补充找到直播卡片互动区域');
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         console.log('[抖音一键拉黑] 找到', allInteractionAreas.length, '个有效互动区域');
 
         let insertedCount = 0;
@@ -2248,7 +2934,7 @@
                             validCount++;
                         }
                     }
-                    
+
                     if (validCount > 0) {
                         allPotentialItems.push({
                             selector: selector,
@@ -2283,12 +2969,12 @@
 
         for (let i = 0; i < commentItems.length; i++) {
             const item = commentItems[i];
-            
+
             // 跳过无效的评论元素
             if (!isValidCommentElement(item)) {
                 continue;
             }
-            
+
             const result = insertButtonForComment(item);
             if (result === true) {
                 insertedCount++;
@@ -2300,6 +2986,8 @@
                     failedCount++;
                 }
             }
+            // 顺手扫一遍关键词
+            handleCommentBlockWord(item);
         }
 
         console.log('[抖音一键拉黑] 评论区处理完成: 插入', insertedCount, '个, 跳过', skippedCount, '个, 失败', failedCount, '个');
@@ -2307,26 +2995,360 @@
         return insertedCount;
     }
 
+    // 提取评论文本（不包含作者昵称/位置等元数据）
+    function extractCommentText(commentItem) {
+        // 尝试用 .C7LroK_h/.WFJiGxr7 等结构定位
+        const candidates = [
+            '.WFJiGxr7',
+            '.C7LroK_h',
+            '.comment-content',
+            '.comment-text',
+            '[class*="commentContent"]',
+            '[class*="CommentContent"]',
+            '[class*="comment-text"]'
+        ];
+        for (const sel of candidates) {
+            try {
+                const el = commentItem.querySelector(sel);
+                if (el && el.textContent) {
+                    return el.textContent.trim();
+                }
+            } catch (e) {}
+        }
+        // 兜底：取整个评论项的 textContent 减去可能的"4小时前·安徽"尾巴
+        return (commentItem.textContent || '').trim();
+    }
+
+    // 检查评论文本是否包含屏蔽词
+    function commentTextMatchesBlockWord(text, wordList) {
+        if (!text || !wordList || wordList.length === 0) return null;
+        for (const word of wordList) {
+            const w = (word || '').trim();
+            if (!w) continue;
+            if (text.includes(w)) return w;
+        }
+        return null;
+    }
+
+    // 应用屏蔽词到一条评论（隐藏或仅标记）
+    function applyBlockWordToComment(commentItem, matchedWord) {
+        if (!commentItem || !commentItem.isConnected) return;
+        if (commentItem.dataset.dyBlockWordApplied === '1') return;
+        commentItem.dataset.dyBlockWordApplied = '1';
+        commentItem.dataset.dyBlockWord = matchedWord;
+        if (hideCommentsOnBlockWord) {
+            commentItem.style.setProperty('display', 'none', 'important');
+        } else {
+            commentItem.style.setProperty('outline', '1px dashed #555', 'important');
+        }
+    }
+
+    // 处理一条评论的关键词命中（命中后顺手拉黑该用户）
+    async function handleCommentBlockWord(commentItem) {
+        if (!commentItem || commentItem.dataset.dyBlockWordHandled === '1') return;
+        if (!blockWordEnabled) return;
+        if (!blockWords || blockWords.length === 0) return;
+
+        const text = extractCommentText(commentItem);
+        const matched = commentTextMatchesBlockWord(text, blockWords);
+        if (!matched) return;
+
+        applyBlockWordToComment(commentItem, matched);
+        commentItem.dataset.dyBlockWordHandled = '1';
+
+        // 命中 → 拉黑用户（不弹 toast 避免刷屏）
+        const info = getCommentAuthorInfo(commentItem);
+        if (info && info.secUid) {
+            const processedKey = 'kw:' + info.secUid;
+            if (batchBlockState.processedUids.has(processedKey)) return;
+            batchBlockState.processedUids.add(processedKey);
+            try {
+                const result = await blockUser(info.secUid, false, true);
+                if (result && result.success) {
+                    recordBlockedUser(info, 'keyword:' + matched);
+                    // 同步按钮状态
+                    const btn = commentItem.querySelector('.douyin-comment-block-btn');
+                    if (btn) markCommentBtnBlocked(btn);
+                }
+            } catch (e) {}
+        }
+    }
+
+    // 批量处理当前所有评论的关键词
+    function processAllCommentsForBlockWord() {
+        if (!blockWordEnabled) return;
+        if (!blockWords || blockWords.length === 0) return;
+        const items = document.querySelectorAll('[data-e2e="comment-item"]');
+        items.forEach(handleCommentBlockWord);
+    }
+
+    // 处理一条弹幕的关键词命中（命中后顺手拉黑该用户）
+    // 弹幕与评论结构差异大：弹幕是数字 userId，评论是 sec_uid，所以独立实现
+    async function handleDanmuBlockWord(danmuEl) {
+        if (!danmuEl || danmuEl.dataset.dyBlockWordHandled === '1') return;
+        if (!blockWordEnabled) return;
+        if (!blockWords || blockWords.length === 0) return;
+        if (!isValidDanmuElement(danmuEl)) return;
+
+        const info = getDanmuAuthorInfo(danmuEl);
+        const text = info.text;
+        if (!text) return;
+
+        const matched = commentTextMatchesBlockWord(text, blockWords);
+        if (!matched) return;
+
+        // 标记为已处理（无论后续拉黑成功与否，避免重复触发）
+        danmuEl.dataset.dyBlockWordHandled = '1';
+        danmuEl.dataset.dyBlockWord = matched;
+        danmuEl.dataset.dyBlockWordApplied = '1';
+
+        // 视觉：隐藏或加虚框
+        if (hideCommentsOnBlockWord) {
+            danmuEl.style.setProperty('display', 'none', 'important');
+        } else {
+            danmuEl.style.setProperty('outline', '1px dashed #555', 'important');
+        }
+
+        // 异步拉黑（弹幕是数字 userId，先转 sec_uid）
+        if (!info.userId) return;
+        try {
+            const sec = await resolveDanmuUserToSecUid(info.userId);
+            if (!sec) return;
+            const processedKey = 'danmu-kw:' + sec;
+            if (batchBlockState.processedUids.has(processedKey)) return;
+            batchBlockState.processedUids.add(processedKey);
+
+            const result = await blockUser(sec, false, true);
+            if (result && result.success) {
+                recordBlockedUser(enrichAuthorInfo({
+                    secUid: sec,
+                    nickname: info.nickname || ('uid_' + info.userId)
+                }), 'danmu-keyword:' + matched);
+                // 同步弹幕按钮的"已拉黑"态
+                const btn = danmuEl.querySelector('.douyin-danmu-block-btn');
+                if (btn) {
+                    btn.title = '已拉黑';
+                    btn.style.opacity = '0.5';
+                }
+            }
+        } catch (e) {}
+    }
+
+    // 批量处理弹幕的关键词（在按钮已插入后调用）
+    function processAllDanmuForBlockWord() {
+        if (!blockWordEnabled) return;
+        if (!blockWords || blockWords.length === 0) return;
+        const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
+        items.forEach(handleDanmuBlockWord);
+    }
+
     // 验证元素是否是有效的评论元素（包含用户信息）
     function isValidCommentElement(element) {
         if (!element || element.nodeType !== Node.ELEMENT_NODE) {
             return false;
         }
-        
+
         // 检查是否包含用户链接
         const hasUserLink = element.querySelector('a[href*="/user/"]') !== null ||
                            element.querySelector('a[href*="MS4wLj"]') !== null;
-        
+
         // 检查是否包含评论内容
         const hasContent = element.textContent && element.textContent.trim().length > 0;
-        
+
         // 检查是否是按钮本身（避免重复处理）
         const isButton = element.classList && (
             element.classList.contains('douyin-comment-block-btn') ||
             element.classList.contains('douyin-block-btn')
         );
-        
+
         return hasUserLink && hasContent && !isButton;
+    }
+
+    // 验证元素是否是有效的弹幕元素（含 data-danmaku-user-id / data-danmu-id）
+    function isValidDanmuElement(element) {
+        if (!element || element.nodeType !== Node.ELEMENT_NODE) return false;
+        if (element.classList && (
+            element.classList.contains('douyin-comment-block-btn') ||
+            element.classList.contains('douyin-block-btn') ||
+            element.classList.contains('douyin-danmu-block-btn')
+        )) return false;
+        const userId = element.getAttribute('data-danmaku-user-id');
+        const danmuId = element.getAttribute('data-danmu-id');
+        if (!userId && !danmuId) return false;
+        const textEl = element.querySelector('.danMuText, .CX7YtMrf');
+        return !!(textEl && (textEl.textContent || '').trim());
+    }
+
+    // 从弹幕元素提取用户信息
+    function getDanmuAuthorInfo(danmuEl) {
+        const userId = danmuEl.getAttribute('data-danmaku-user-id') || '';
+        const danmuId = danmuEl.getAttribute('data-danmu-id') || '';
+        const textEl = danmuEl.querySelector('.danMuText, .CX7YtMrf');
+        const text = textEl ? (textEl.textContent || '').trim() : '';
+        const isAuthor = danmuEl.getAttribute('data-is-danmu-author') === 'true';
+        return {
+            userId: userId,
+            danmuId: danmuId,
+            nickname: text.slice(0, 30),
+            text: text,
+            isAuthor: isAuthor
+        };
+    }
+
+    // 给单条弹幕创建迷你拉黑按钮
+    function createDanmuBlockButton(danmuEl, danmuInfo) {
+        const btn = document.createElement('div');
+        btn.className = 'douyin-danmu-block-btn';
+        btn.title = '拉黑该弹幕用户';
+        btn.dataset.danmuUserId = danmuInfo.userId || '';
+        btn.dataset.danmuId = danmuInfo.danmuId || '';
+        btn.innerHTML = '<svg viewBox="0 0 1024 1024" width="14" height="14" style="fill:#ff4444;vertical-align:middle;"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" p-id="4149"></path></svg>';
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const userId = btn.dataset.danmuUserId;
+            if (!userId) {
+                showToast('弹幕用户 ID 缺失');
+                return;
+            }
+            btn.style.pointerEvents = 'none';
+            try {
+                const secUid = await resolveDanmuUserToSecUid(userId);
+                if (!secUid) {
+                    showToast('无法获取该用户 sec_uid（可能接口受限）');
+                    btn.style.pointerEvents = 'auto';
+                    return;
+                }
+                const result = await blockUser(secUid, false, true);
+                if (result && result.success) {
+                    btn.title = '已拉黑';
+                    btn.style.opacity = '0.5';
+                    recordBlockedUser(enrichAuthorInfo({ secUid: secUid, nickname: danmuInfo.nickname || ('uid_' + userId) }), 'danmu');
+                    showToast('已拉黑该弹幕用户');
+                } else {
+                    showToast('拉黑失败');
+                }
+            } catch (err) {
+                console.error('[抖音一键拉黑] 弹幕拉黑异常:', err);
+                showToast('拉黑失败：' + (err && err.message ? err.message : '未知'));
+            } finally {
+                btn.style.pointerEvents = 'auto';
+            }
+        });
+        return btn;
+    }
+
+    // 把抖音的 numeric userId 转成 sec_uid（轻量接口）
+    async function resolveDanmuUserToSecUid(userId) {
+        if (!userId) return null;
+        if (/^MS4wLj/.test(userId)) return userId; // 已是 sec_uid
+        // 优先从直播间 WS 缓存查
+        try {
+            for (const [nick, info] of liveCommentUserMap.entries()) {
+                if (info && info.userId === userId && info.secUid) {
+                    return info.secUid;
+                }
+            }
+        } catch (e) {}
+        // 调抖音用户信息接口：https://www.douyin.com/aweme/v1/web/user/profile/other/
+        try {
+            const sec = await fetchUserSecUidByUserId(userId);
+            if (sec) return sec;
+        } catch (e) {}
+        return null;
+    }
+
+    // 通过 userId (数字) 调抖音用户 profile 接口拿 sec_uid
+    async function fetchUserSecUidByUserId(userId) {
+        if (!userId) return null;
+        const params = new URLSearchParams({
+            aid: '6383',
+            app_name: 'douyin_web',
+            live_id: '1',
+            device_platform: 'web',
+            language: 'zh-CN',
+            cookie_enabled: 'true',
+            screen_width: String(window.screen.width || 1920),
+            screen_height: String(window.screen.height || 1080),
+            browser_language: navigator.language || 'zh-CN',
+            browser_platform: navigator.platform || 'Win32',
+            browser_name: 'Chrome',
+            browser_version: getBrowserVersion(),
+            os_name: 'Windows',
+            os_version: '10',
+            msToken: generateMsToken(),
+            sec_user_id: '',
+            publish_video_strategy_type: '2',
+            source: 'publish',
+            user_id: String(userId)
+        });
+        const url = 'https://www.douyin.com/aweme/v1/web/user/profile/other/?' + params.toString();
+        return new Promise((resolve) => {
+            try {
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: url,
+                    headers: {
+                        'Accept': 'application/json, text/plain, */*',
+                        'Referer': window.location.href,
+                        'Cookie': document.cookie
+                    },
+                    timeout: 8000,
+                    onload: function (resp) {
+                        try {
+                            const data = JSON.parse(resp.responseText || '{}');
+                            const u = (data && data.user) || (data && data.data && data.data.user) || null;
+                            if (u && (u.sec_uid || u.secUid)) {
+                                resolve(u.sec_uid || u.secUid);
+                                return;
+                            }
+                        } catch (e) {}
+                        resolve(null);
+                    },
+                    onerror: function () { resolve(null); },
+                    ontimeout: function () { resolve(null); }
+                });
+            } catch (e) { resolve(null); }
+        });
+    }
+
+    // 把拉黑按钮插入到弹幕元素附近
+    function insertButtonToDanmu(danmuEl, btn) {
+        if (!danmuEl || danmuEl.querySelector('.douyin-danmu-block-btn')) return false;
+        // 优先插到 .danMuText 后
+        const textEl = danmuEl.querySelector('.danMuText, .CX7YtMrf');
+        if (textEl && textEl.parentElement) {
+            try {
+                const wrap = document.createElement('span');
+                wrap.style.cssText = 'display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle;';
+                wrap.appendChild(btn);
+                textEl.insertAdjacentElement('afterend', wrap);
+                return true;
+            } catch (e) {}
+        }
+        // 兜底：插到 danmuEl 末尾
+        try {
+            danmuEl.appendChild(btn);
+            return true;
+        } catch (e) {}
+        return false;
+    }
+
+    // 处理页面所有可见弹幕
+    function processAllDanmu() {
+        if (!blockWordEnabled && !logBlockedEnabled) return; // 没启用任何依赖则不渲染
+        const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
+        items.forEach((el) => {
+            if (!isValidDanmuElement(el)) return;
+            if (el.querySelector('.douyin-danmu-block-btn')) return;
+            const info = getDanmuAuthorInfo(el);
+            const btn = createDanmuBlockButton(el, info);
+            insertButtonToDanmu(el, btn);
+        });
+        // 按钮插完后再走关键词检测（独立函数，含去重 + 日志）
+        if (blockWordEnabled) {
+            processAllDanmuForBlockWord();
+        }
     }
 
     // 为视频详情页面插入拉黑按钮
@@ -2334,7 +3356,7 @@
         if (!isVideoDetailPage()) {
             return 0;
         }
-        
+
         const authorInfo = getAuthorInfoFromVideoDetailPage();
         if (!authorInfo || !authorInfo.secUid) {
             return 0;
@@ -2400,6 +3422,16 @@
                     btn.style.color = '#fe2c55';
                     btn.title = '已拉黑';
                     showToast('已拉黑该用户');
+                    // 记录到拉黑日志（视频详情页作者）
+                    try {
+                        recordBlockedUser(enrichAuthorInfo({
+                            secUid: authorInfo.secUid,
+                            userId: authorInfo.userId,
+                            nickname: authorInfo.nickname || ''
+                        }), 'video-author');
+                    } catch (e) {}
+                    // 拉黑后自动"不感兴趣"（仅对视频详情页作者）—— 已注释：功能不完善
+                    // 视频不感兴趣藏在「更多」菜单里，自动打开菜单会跳页/拉黑按钮消失
                 } else {
                     btn.dataset.blocked = 'false';
                     btn.style.color = 'rgba(255, 255, 255, 0.85)';
@@ -2440,169 +3472,155 @@
         return 0;
     }
 
+    // 查找直播间聊天消息DOM元素
+    function findLiveChatMessageElements() {
+        // 策略1：精确选择器（当前抖音版本确认有效）
+        const selectors = ['.webcast-chatroom___item', '.webcast-chatroom___item_new'];
+        for (const sel of selectors) {
+            try {
+                const items = document.querySelectorAll(sel);
+                if (items.length > 0) {
+                    console.log('[抖音拉黑] 通过选择器找到聊天消息:', sel, items.length, '条');
+                    return Array.from(items);
+                }
+            } catch (e) {}
+        }
+
+        // 策略2：部分匹配
+        const partialSelectors = ['[class*="chatroom___item"]', '[class*="chat-room"]'];
+        for (const sel of partialSelectors) {
+            try {
+                const items = document.querySelectorAll(sel);
+                if (items.length > 0) {
+                    console.log('[抖音拉黑] 通过部分匹配找到聊天消息:', sel, items.length, '条');
+                    return Array.from(items);
+                }
+            } catch (e) {}
+        }
+
+        // 策略3：查找聊天区域滚动容器，取其直接子元素中的 .webcast-chatroom___item
+        const scrollContainers = [];
+        document.querySelectorAll('div').forEach(div => {
+            try {
+                const s = window.getComputedStyle(div);
+                if ((s.overflowY === 'scroll' || s.overflowY === 'auto' || s.overflowY === 'hidden') &&
+                    div.children.length >= 2) {
+                    scrollContainers.push(div);
+                }
+            } catch (e) {}
+        });
+        scrollContainers.sort((a, b) => b.children.length - a.children.length);
+        for (const container of scrollContainers) {
+            const chatItems = container.querySelectorAll('.webcast-chatroom___item, [class*="chatroom___item"]');
+            if (chatItems.length >= 2) {
+                console.log('[抖音拉黑] 滚动容器内找到聊天消息:', chatItems.length, '条');
+                return Array.from(chatItems);
+            }
+        }
+
+        console.log('[抖音拉黑] 未找到聊天消息元素');
+        return [];
+    }
+
     // 为直播间评论区插入拉黑按钮
     function insertButtonsForLiveStreamComments() {
         if (!isLiveStreamPage()) {
             return 0;
         }
-        
-        const commentItems = document.querySelectorAll('.webcast-chatroom___item');
+
+        const commentItems = findLiveChatMessageElements();
+        console.log('[抖音拉黑] 扫描直播间评论区, 找到', commentItems.length, '条消息');
+
         let insertedCount = 0;
-        
+
         for (const item of commentItems) {
             if (item.querySelector('.live-block-btn')) continue;
-            
+
             const userInfo = getLiveStreamUserInfo(item);
             if (!userInfo || !userInfo.nickname) continue;
-            
-            const btn = document.createElement('div');
-            btn.className = 'live-block-btn';
-            btn.dataset.blocked = 'false';
-            btn.innerHTML = `
-                <svg class="icon" style="width: 1em;height: 1em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4148"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" fill="#252424" p-id="4149"></path></svg>
-            `;
-            
-            btn.style.cssText = `
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 24px;
-                height: 24px;
-                cursor: pointer;
-                color: #8a9199;
-                border-radius: 4px;
-                transition: all 0.2s;
-                margin-left: 8px;
-            `;
-            
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                btn.style.pointerEvents = 'none';
 
-                const isCurrentlyBlocked = btn.dataset.blocked === 'true';
+            const btn = createLiveCommentBlockBtn(userInfo);
+            if (!btn) continue;
 
-                let secUid = userInfo.secUid;
-
-                // 如果没有 secUid，从缓存中查找（通过资料卡获取的）
-                if (!secUid && userInfo.nickname) {
-                    secUid = liveCommentUserCache.get(userInfo.nickname) || null;
-                }
-
-                // 如果缓存也没有，尝试通过 API 获取
-                if (!secUid && (userInfo.targetUid || userInfo.secTargetUid || userInfo.webcastUid)) {
-                    showToast('正在获取用户信息...');
-                    secUid = await fetchLiveCommentUserSecUid(userInfo.targetUid, userInfo.secTargetUid, userInfo.webcastUid);
-                }
-
-                if (!secUid) {
-                    showToast('无法获取用户信息');
-                    btn.style.pointerEvents = 'auto';
-                    return;
-                }
-
-                const result = await blockUser(secUid, isCurrentlyBlocked);
-                
-                if (result.success) {
-                    if (result.isBlocked) {
-                        btn.dataset.blocked = 'true';
-                        btn.style.color = '#fe2c55';
-                        showToast('已拉黑 ' + userInfo.nickname);
-                    } else {
-                        btn.dataset.blocked = 'false';
-                        btn.style.color = '#8a9199';
-                        showToast('已解除拉黑 ' + userInfo.nickname);
-                    }
-                }
-                
-                setTimeout(() => {
-                    btn.style.pointerEvents = 'auto';
-                }, 1000);
-            });
-
-            btn.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                openBlockSettings();
-            });
-            
-            const wrapper = item.querySelector('.NkS2Invn');
-            if (wrapper) {
-                wrapper.prepend(btn);
-                insertedCount++;
+            // 插入到 .NkS2Invn 容器的最前面
+            let inserted = false;
+            const nkContainer = item.querySelector('.NkS2Invn');
+            if (nkContainer) {
+                nkContainer.insertBefore(btn, nkContainer.firstChild);
+                inserted = true;
             }
+            // 兜底：插入到消息元素的开头
+            if (!inserted && item.firstChild) {
+                item.insertBefore(btn, item.firstChild);
+                inserted = true;
+            }
+
+            if (inserted) insertedCount++;
         }
-        
+
         return insertedCount;
     }
 
-    // 为推荐页直播间播放器插入拉黑按钮
-    function insertButtonForRecommendLiveStream() {
-        // 只在首页推荐页执行
-        if (isVideoDetailPage() || isLiveStreamPage()) {
-            return 0;
-        }
-        
-        // 检查是否存在直播间播放器
-        const playerControls = document.querySelector('.douyin-player-controls');
-        if (!playerControls) {
-            return 0;
-        }
-        
-        // 检查是否已插入
-        if (document.querySelector('.douyin-recommend-live-block-btn')) {
-            return 0;
-        }
-        
-        const hostInfo = getLiveStreamHostInfo();
-        if (!hostInfo || !hostInfo.secUid) {
-            console.log('[抖音一键拉黑] 无法获取推荐页直播间主播信息');
-            return 0;
-        }
-        
-        console.log('[抖音一键拉黑] 推荐页直播间主播信息:', hostInfo);
-        
+    // 创建直播间评论拉黑按钮
+    function createLiveCommentBlockBtn(userInfo) {
         const btn = document.createElement('div');
-        btn.className = 'douyin-recommend-live-block-btn';
+        btn.className = 'live-block-btn';
         btn.dataset.blocked = 'false';
         btn.innerHTML = `
-            <svg class="icon" style="width: 1em;height: 1em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4148"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" fill="#252424" p-id="4149"></path></svg>
+            <svg class="icon" style="width:1em;height:1em;vertical-align:middle;fill:currentColor;overflow:hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z"/></svg>
         `;
-        
+
         btn.style.cssText = `
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            cursor: pointer;
-            color: #fff;
-            border-radius: 4px;
-            transition: all 0.2s;
-            background: rgba(0, 0, 0, 0.3);
+            display:inline-flex;align-items:center;justify-content:center;
+            width:20px;height:20px;cursor:pointer;color:#8a9199;
+            border-radius:4px;transition:all 0.2s;margin-left:6px;
+            flex-shrink:0;
         `;
-        
+
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             btn.style.pointerEvents = 'none';
 
             const isCurrentlyBlocked = btn.dataset.blocked === 'true';
-            const result = await blockUser(hostInfo.secUid, isCurrentlyBlocked);
+            let secUid = userInfo.secUid;
+
+            if (!secUid && userInfo.nickname) {
+                secUid = liveCommentUserMap.get(userInfo.nickname)?.secUid || null;
+            }
+
+            if (!secUid && userInfo.nickname) {
+                showToast('正在获取用户信息...');
+                secUid = await getLiveCommentSecUid(userInfo.nickname);
+            }
+
+            if (!secUid) {
+                showToast('无法获取用户信息，请先点击用户名弹出资料卡');
+                btn.style.pointerEvents = 'auto';
+                return;
+            }
+
+            const result = await blockUser(secUid, isCurrentlyBlocked);
 
             if (result.success) {
                 if (result.isBlocked) {
                     btn.dataset.blocked = 'true';
-                    btn.style.background = 'rgba(254, 44, 85, 0.6)';
-                    showToast('已拉黑该主播');
+                    btn.style.color = '#fe2c55';
+                    showToast('已拉黑 ' + userInfo.nickname);
+                    // 记录到拉黑日志（直播间评论）
+                    try {
+                        recordBlockedUser(enrichAuthorInfo({
+                            secUid: secUid,
+                            nickname: userInfo.nickname || ''
+                        }), 'live-comment');
+                    } catch (e) {}
                 } else {
                     btn.dataset.blocked = 'false';
-                    btn.style.background = 'rgba(0, 0, 0, 0.3)';
-                    showToast('已解除拉黑');
+                    btn.style.color = '#8a9199';
+                    showToast('已解除拉黑 ' + userInfo.nickname);
                 }
             }
 
-            setTimeout(() => {
-                btn.style.pointerEvents = 'auto';
-            }, 1000);
+            setTimeout(() => { btn.style.pointerEvents = 'auto'; }, 1000);
         });
 
         btn.addEventListener('contextmenu', (e) => {
@@ -2611,15 +3629,160 @@
             openBlockSettings();
         });
 
-        // 插入到播放器控制栏的最右边
-        const controlsRight = document.querySelector('.douyin-player-controls-right');
-        if (controlsRight) {
-            controlsRight.appendChild(btn);
-            console.log('[抖音一键拉黑] 推荐页直播间拉黑按钮已插入');
-            return 1;
+        return btn;
+    }
+
+    // 直播间聊天消息DOM变化监听
+    function setupLiveStreamChatObserver() {
+        if (!isLiveStreamPage()) return;
+
+        const liveChatObserver = new MutationObserver((mutations) => {
+            let hasNewChat = false;
+            for (const m of mutations) {
+                if (m.type === 'childList' && m.addedNodes.length > 0) {
+                    hasNewChat = true;
+                    break;
+                }
+            }
+            if (hasNewChat) {
+                insertButtonsForLiveStreamComments();
+            }
+        });
+
+        // 先找到聊天容器再观察
+        setTimeout(() => {
+            const items = findLiveChatMessageElements();
+            if (items.length > 0 && items[0].parentElement) {
+                liveChatObserver.observe(items[0].parentElement, { childList: true });
+                console.log('[抖音拉黑] 直播间聊天变化监听已启动');
+            } else {
+                liveChatObserver.observe(document.body, { childList: true, subtree: true });
+                console.log('[抖音拉黑] 直播间聊天监听已启动（全局模式，等待聊天区域出现）');
+            }
+        }, 1000);
+    }
+
+    // 为推荐页直播间播放器插入拉黑按钮
+    // 从推荐页直播卡片的info区域提取用户信息（user链接中的 sec_uid）
+    function getRecommendLiveStreamInfo(container) {
+        // 查找包含 sec_uid 的用户链接
+        const userLink = container.querySelector('a[href*="/user/MS4wLj"]');
+        if (!userLink) return null;
+
+        const href = userLink.getAttribute('href') || '';
+        const secUidMatch = href.match(/MS4wLj[A-Za-z0-9_\-]{15,}/);
+        if (!secUidMatch) return null;
+
+        const nickname = userLink.textContent.replace(/^@/, '').trim();
+
+        return {
+            secUid: secUidMatch[0],
+            nickname: nickname || '主播'
+        };
+    }
+
+    function insertButtonForRecommendLiveStream() {
+        // 只在首页推荐页执行
+        if (isVideoDetailPage() || isLiveStreamPage()) {
+            return 0;
         }
-        
-        return 0;
+
+        let totalInserted = 0;
+
+        // 途径1：播放器模式的直播（带 douyin-player-controls）
+        const playerControls = document.querySelector('.douyin-player-controls');
+        if (playerControls && !document.querySelector('.douyin-recommend-live-block-btn')) {
+            const hostInfo = getLiveStreamHostInfo();
+            if (hostInfo && hostInfo.secUid) {
+                console.log('[抖音一键拉黑] 推荐页播放器直播主播:', hostInfo);
+                const btn = createRecommendLiveBlockBtn(hostInfo);
+                const controlsRight = document.querySelector('.douyin-player-controls-right');
+                if (controlsRight) {
+                    controlsRight.appendChild(btn);
+                    totalInserted++;
+                }
+            }
+        }
+
+        // 途径2：卡片信息区模式的直播（feed-live，user链接中包含sec_uid）
+        const feedLiveCards = document.querySelectorAll('[data-e2e="feed-live"]');
+        for (const card of feedLiveCards) {
+            if (card.querySelector('.douyin-recommend-live-block-btn')) continue;
+
+            const hostInfo = getRecommendLiveStreamInfo(card);
+            if (!hostInfo || !hostInfo.secUid) continue;
+
+            console.log('[抖音一键拉黑] 推荐页卡片直播主播:', hostInfo);
+
+            const btn = createRecommendLiveBlockBtn(hostInfo);
+
+            // 插入到卡片信息区域（昵称旁边）
+            const infoArea = card.querySelector('.mW1rnCF4, .USi52T4u, [class*="info"]');
+            const nickArea = card.querySelector('.c9YbeHv6, [class*="nickname"]');
+            if (infoArea && nickArea && nickArea.parentElement) {
+                nickArea.parentElement.insertBefore(btn, nickArea.nextSibling);
+            } else if (infoArea) {
+                infoArea.appendChild(btn);
+            } else {
+                card.appendChild(btn);
+            }
+            totalInserted++;
+        }
+
+        if (totalInserted > 0) {
+            console.log('[抖音一键拉黑] 推荐页直播间拉黑按钮已插入', totalInserted, '个');
+        }
+        return totalInserted;
+    }
+
+    function createRecommendLiveBlockBtn(hostInfo) {
+        const btn = document.createElement('div');
+        btn.className = 'douyin-recommend-live-block-btn';
+        btn.dataset.blocked = 'false';
+        btn.innerHTML = `
+            <svg class="icon" style="width:1em;height:1em;vertical-align:middle;fill:currentColor;overflow:hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z"/></svg>
+        `;
+
+        btn.style.cssText = `
+            display:inline-flex;align-items:center;justify-content:center;
+            width:28px;height:28px;cursor:pointer;color:#fff;
+            border-radius:4px;transition:all 0.2s;
+            background:rgba(0,0,0,0.3);flex-shrink:0;margin-left:6px;
+        `;
+
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            btn.style.pointerEvents = 'none';
+            const isCurrentlyBlocked = btn.dataset.blocked === 'true';
+            const result = await blockUser(hostInfo.secUid, isCurrentlyBlocked);
+            if (result.success) {
+                if (result.isBlocked) {
+                    btn.dataset.blocked = 'true';
+                    btn.style.background = 'rgba(254,44,85,0.6)';
+                    showToast('已拉黑 ' + (hostInfo.nickname || '主播'));
+                    // 记录到拉黑日志（推荐页直播间卡片）
+                    try {
+                        recordBlockedUser(enrichAuthorInfo({
+                            secUid: hostInfo.secUid,
+                            nickname: hostInfo.nickname || ''
+                        }), 'live-recommend');
+                    } catch (e) {}
+                } else {
+                    btn.dataset.blocked = 'false';
+                    btn.style.background = 'rgba(0,0,0,0.3)';
+                    showToast('已解除拉黑');
+                }
+            }
+            setTimeout(() => { btn.style.pointerEvents = 'auto'; }, 1000);
+        });
+
+        btn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openBlockSettings();
+        });
+
+        return btn;
     }
 
     // 为直播间主播信息侧边栏插入拉黑按钮
@@ -2628,55 +3791,79 @@
             return 0;
         }
 
-        const container = document.querySelector('.NZ4dNxK4');
-        if (!container) {
-            return 0;
-        }
-
-        if (container.querySelector('.live-host-block-btn')) {
-            return 0;
-        }
-
+        // 通用方式查找主播信息容器
         const hostInfo = await getLiveStreamHostFromSidePanel();
         if (!hostInfo || !hostInfo.secUid) {
-            console.log('[抖音一键拉黑] 无法获取直播间主播信息');
             return 0;
         }
-        
+
         console.log('[抖音一键拉黑] 直播间主播信息:', hostInfo);
-        
+
+        // 查找插入位置——跟随按钮
+        const followBtn = document.querySelector('[data-e2e="feed-follow-icon"], .follow, [class*="follow"]');
+        if (followBtn) {
+            if (followBtn.parentElement) {
+                if (followBtn.parentElement.querySelector('.live-host-block-btn')) return 0;
+
+                const btn = createLiveHostBlockBtn(hostInfo);
+                followBtn.parentElement.insertBefore(btn, followBtn.nextSibling);
+                return 1;
+            }
+        }
+
+        // 兜底：查找包含主播头像的容器
+        const avatarImg = document.querySelector('img[src*="douyinpic.com"]');
+        if (avatarImg) {
+            let container = avatarImg.parentElement;
+            for (let i = 0; i < 8 && container; i++) {
+                if (container.querySelector('.live-host-block-btn')) return 0;
+                const texts = container.querySelectorAll('span, div');
+                for (const t of texts) {
+                    if (t.textContent && t.textContent.trim().length >= 2 && t.textContent.trim().length <= 30) {
+                        if (t.textContent.trim() === hostInfo.nickname) {
+                            const btn = createLiveHostBlockBtn(hostInfo);
+                            t.parentElement.insertBefore(btn, t.nextSibling);
+                            return 1;
+                        }
+                    }
+                }
+                container = container.parentElement;
+            }
+        }
+
+        return 0;
+    }
+
+    function createLiveHostBlockBtn(hostInfo) {
         const btn = document.createElement('div');
         btn.className = 'live-host-block-btn';
         btn.dataset.blocked = 'false';
         btn.innerHTML = `
-            <svg class="icon" style="width: 1em;height: 1em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4148"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" fill="#252424" p-id="4149"></path></svg>
+            <svg class="icon" style="width:1em;height:1em;vertical-align:middle;fill:currentColor;overflow:hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z"/></svg>
         `;
-        
         btn.style.cssText = `
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 36px;
-            height: 36px;
-            cursor: pointer;
-            color: #61666d;
-            border-radius: 8px;
-            transition: all 0.2s;
+            display:flex;align-items:center;justify-content:center;
+            width:36px;height:36px;cursor:pointer;color:#61666d;
+            border-radius:8px;transition:all 0.2s;
         `;
-        
         btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             btn.style.pointerEvents = 'none';
-
             const isCurrentlyBlocked = btn.dataset.blocked === 'true';
             const result = await blockUser(hostInfo.secUid, isCurrentlyBlocked);
-
             if (result.success) {
                 if (result.isBlocked) {
                     btn.dataset.blocked = 'true';
                     btn.style.color = '#fe2c55';
                     btn.style.background = 'rgba(254, 44, 85, 0.1)';
                     showToast('已拉黑 ' + hostInfo.nickname);
+                    // 记录到拉黑日志（直播间主播）
+                    try {
+                        recordBlockedUser(enrichAuthorInfo({
+                            secUid: hostInfo.secUid,
+                            nickname: hostInfo.nickname || ''
+                        }), 'live-host');
+                    } catch (e) {}
                 } else {
                     btn.dataset.blocked = 'false';
                     btn.style.color = '#61666d';
@@ -2684,31 +3871,22 @@
                     showToast('已解除拉黑 ' + hostInfo.nickname);
                 }
             }
-
-            setTimeout(() => {
-                btn.style.pointerEvents = 'auto';
-            }, 1000);
+            setTimeout(() => { btn.style.pointerEvents = 'auto'; }, 1000);
         });
-
         btn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             e.stopPropagation();
             openBlockSettings();
         });
-
-        // 插入到关注按钮旁边
-        const followBtn = container.querySelector('.follow');
-        if (followBtn && followBtn.parentElement) {
-            followBtn.parentElement.insertBefore(btn, followBtn.nextSibling);
-            return 1;
-        }
-        
-        return 0;
+        return btn;
     }
 
     // 主初始化函数 - 增强版
     function init() {
-        console.log('[抖音拉黑] 初始化 v4.5 (增强版)');
+        console.log('[抖音拉黑] 初始化 v5.5 (关键词拉黑 + 拉黑日志版)');
+
+        // 启动WebSocket拦截器（必须最早执行）
+        setupWebSocketInterceptor();
 
         // 首次立即插入
         insertButtonsForAll();
@@ -2718,14 +3896,33 @@
             insertButtonForVideoDetailPage();
         }
 
+        if (isLiveStreamPage()) {
+            insertButtonsForLiveStreamComments();
+            insertButtonForLiveStreamHost();
+            setupLiveStreamChatObserver();
+        }
+
         // 推荐页直播间
-        // insertButtonForRecommendLiveStream();
+        insertButtonForRecommendLiveStream();
+
+        // 启动关键词拉黑扫描
+        processAllCommentsForBlockWord();
+
+        // 启动弹幕按钮扫描
+        processAllDanmu();
 
         // 页面可见性变化时的处理
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 console.log('[抖音一键拉黑] 页面变为可见，重新检查评论区');
                 insertButtonsForComments();
+                processAllCommentsForBlockWord();
+                processAllDanmu();
+                if (isLiveStreamPage()) {
+                    insertButtonsForLiveStreamComments();
+                    insertButtonForLiveStreamHost();
+                    setupLiveStreamChatObserver();
+                }
             }
         });
     }
@@ -2817,6 +4014,11 @@
                     console.log('[抖音一键拉黑] 检测到新视频，插入按钮');
                     insertButtonsForAll();
                     insertButtonsForComments();
+                    if (isLiveStreamPage()) {
+                        insertButtonsForLiveStreamComments();
+                        insertButtonForLiveStreamHost();
+                        setupLiveStreamChatObserver();
+                    }
                 }, 150);
             }
 
@@ -2834,15 +4036,26 @@
                             if (isValidCommentElement(item) && !item.querySelector('.douyin-comment-block-btn')) {
                                 insertButtonForComment(item);
                             }
+                            // 关键词拉黑扫描
+                            handleCommentBlockWord(item);
                         }
                     } else {
                         // 如果没有收集到具体的新评论项，执行全面检查
                         console.log('[抖音一键拉黑] 检测到评论区变化，全面检查');
                         insertButtonsForComments();
+                        processAllCommentsForBlockWord();
+                    }
+
+                    // ===== 弹幕：检测到节点变化就扫一遍 =====
+                    processAllDanmu();
+
+                    // ===== 批量模式：新评论出现时立即触发扫描 =====
+                    if (batchBlockState.active && Date.now() - batchBlockState.startTime >= 5000) {
+                        setTimeout(processBatchBlockQueue, 0);
                     }
                 }, 100);
             }
-            
+
             // 清理已处理集合，防止内存泄漏（保留最近1000个）
             if (lastProcessedComments.size > 1000) {
                 const iterator = lastProcessedComments.values();
@@ -2861,13 +4074,482 @@
         console.log('[抖音一键拉黑] 已启动视频和评论区监听');
     }
 
+    // ========== 批量拉黑模式（长按快捷键 >5秒） ==========
+    const batchBlockState = {
+        active: false,
+        startTime: 0,
+        timer: null,
+        processedUids: new Set(),
+        running: false,
+        authorSecUid: null,      // 当前视频作者的 sec_uid
+        authorBtn: null,         // 视频作者对应的评论按钮
+        authorPending: false,    // 是否还有作者未拉黑
+        phaseLabel: '扫描评论区中…',
+        stats: { success: 0, failed: 0, authorPending: 0 }
+    };
+
+    // 提取当前视频作者 sec_uid（按优先级：全局变量 → 视频详情按钮 → 视频卡片按钮）
+    function getCurrentVideoAuthorSecUid() {
+        const win = unsafeWindow || window;
+        const candidates = [
+            () => win.__INITIAL_STATE__?.user?.sec_uid,
+            () => win.__INITIAL_STATE__?.aweme?.author?.sec_uid,
+            () => win.__INITIAL_STATE__?.awemeItem?.author?.sec_uid,
+            () => win.__INITIAL_STATE__?.video?.author?.sec_uid,
+            () => win.__INITIAL_STATE__?.videoInfo?.author?.sec_uid,
+            () => win.__INITIAL_STATE__?.currentVideo?.author?.sec_uid,
+            () => win.__SSR_DATA__?.user?.sec_uid,
+            () => win.__SSR_DATA__?.aweme?.author?.sec_uid,
+            () => win.__INITIAL_PROPS__?.aweme?.author?.sec_uid,
+            () => win._ROUTER_DATA?.loaderData?.aweme?.aweme?.author?.sec_uid,
+            () => {
+                // 兜底：尝试从页面上的"作者主页"链接获取
+                const authorLink = document.querySelector('a[data-e2e="video-info-username"], [data-e2e="user-info"] a[href*="/user/"], .user-info a[href*="/user/"]');
+                if (authorLink) {
+                    const href = authorLink.getAttribute('href') || '';
+                    const m = href.match(/MS4wLj[A-Za-z0-9_\-]+/);
+                    return m ? m[0] : null;
+                }
+                return null;
+            },
+            () => {
+                // 兜底 2：从 videoPlayer / 视频容器中已插入的拉黑按钮反推
+                const btn = document.querySelector('.douyin-block-btn[data-sec-uid]');
+                if (btn) {
+                    const sec = btn.dataset.secUid;
+                    if (sec && sec.startsWith('MS4wLj')) return sec;
+                }
+                return null;
+            }
+        ];
+        for (const fn of candidates) {
+            try {
+                const v = fn();
+                if (v && typeof v === 'string' && v.startsWith('MS4wLj')) {
+                    return v;
+                }
+            } catch (e) {}
+        }
+        return null;
+    }
+
+    function showBatchBlockIndicator() {
+        let indicator = document.getElementById('douyin-batch-block-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'douyin-batch-block-indicator';
+            indicator.innerHTML = `
+                <div class="batch-header">
+                    <span class="batch-pulse-dot"></span>
+                    <span>批量拉黑进行中</span>
+                </div>
+                <div class="batch-phase" id="batch-phase">扫描评论区中…</div>
+                <div class="batch-stats">
+                    <span>成功 <span class="batch-count" id="batch-success">0</span></span>
+                    <span>失败 <span class="batch-count" id="batch-failed">0</span></span>
+                    <span>作者待拉黑 <span class="batch-count" id="batch-author-pending">0</span></span>
+                </div>
+            `;
+            document.body.appendChild(indicator);
+        }
+        const s = document.getElementById('batch-success');
+        const f = document.getElementById('batch-failed');
+        const p = document.getElementById('batch-author-pending');
+        if (s) s.textContent = batchBlockState.stats.success;
+        if (f) f.textContent = batchBlockState.stats.failed;
+        if (p) p.textContent = batchBlockState.stats.authorPending;
+        indicator.style.display = 'block';
+    }
+
+    function hideBatchBlockIndicator() {
+        const indicator = document.getElementById('douyin-batch-block-indicator');
+        if (indicator) indicator.style.display = 'none';
+    }
+
+    function updateBatchIndicator() {
+        const indicator = document.getElementById('douyin-batch-block-indicator');
+        if (indicator && indicator.style.display === 'block') {
+            const s = document.getElementById('batch-success');
+            const f = document.getElementById('batch-failed');
+            const p = document.getElementById('batch-author-pending');
+            const ph = document.getElementById('batch-phase');
+            if (s) s.textContent = batchBlockState.stats.success;
+            if (f) f.textContent = batchBlockState.stats.failed;
+            if (p) p.textContent = batchBlockState.stats.authorPending;
+            if (ph && batchBlockState.phaseLabel) ph.textContent = batchBlockState.phaseLabel;
+        }
+    }
+
+    function startBatchBlock() {
+        if (batchBlockState.active) return;
+        batchBlockState.active = true;
+        batchBlockState.startTime = Date.now();
+        batchBlockState.stats = { success: 0, failed: 0, authorPending: 0 };
+        batchBlockState.authorSecUid = null;
+        batchBlockState.authorBtn = null;
+        batchBlockState.authorPending = false;
+        batchBlockState.phaseLabel = '扫描评论区中…';
+        console.log('[抖音一键拉黑] 长按检测启动, batchLongPressMs=', batchLongPressMs, ' batchConcurrency=', batchConcurrency, ' blockVideoAuthorAfterBatch=', blockVideoAuthorAfterBatch);
+
+        // 提前预取视频作者 sec_uid（多路兜底）
+        try {
+            batchBlockState.authorSecUid = getCurrentVideoAuthorSecUid();
+            console.log('[抖音一键拉黑] 当前视频作者 sec_uid:', batchBlockState.authorSecUid);
+        } catch (e) {
+            console.warn('[抖音一键拉黑] 预取作者 sec_uid 异常:', e);
+        }
+
+        // 定时器：长按达到 batchLongPressMs 之后才进入批量模式
+        if (batchBlockState.timer) {
+            clearTimeout(batchBlockState.timer);
+            batchBlockState.timer = null;
+        }
+        batchBlockState.timer = setTimeout(() => {
+            if (batchBlockState.active) {
+                enterBatchBlockMode();
+            }
+        }, batchLongPressMs);
+    }
+
+    function enterBatchBlockMode() {
+        showToast('批量拉黑模式已启动，并发拉黑中');
+        showBatchBlockIndicator();
+        processBatchBlockQueue();
+    }
+
+    // 用户停止长按：先停止扫描，最后拉黑作者
+    async function stopBatchBlock() {
+        const duration = Date.now() - batchBlockState.startTime;
+        const wasActive = batchBlockState.active;
+
+        batchBlockState.active = false;
+        if (batchBlockState.timer) {
+            clearTimeout(batchBlockState.timer);
+            batchBlockState.timer = null;
+        }
+
+        if (!wasActive) return;
+
+        if (duration < batchLongPressMs) {
+            // 短按：执行原有单条拉黑逻辑
+            triggerBlockFromShortcut();
+        } else {
+            // 长按结束：等待当前并发队列结束，最后拉黑作者
+            batchBlockState.phaseLabel = '收尾中…';
+            updateBatchIndicator();
+
+            // 等待 processBatchBlockQueue 自行退出
+            await waitForBatchIdle();
+
+            // 最后拉黑作者：每次重取一次 sec_uid（长按期间可能未及时识别）
+            let authorSecUid = batchBlockState.authorSecUid;
+            if (!authorSecUid) {
+                try {
+                    authorSecUid = getCurrentVideoAuthorSecUid();
+                    batchBlockState.authorSecUid = authorSecUid;
+                } catch (e) {}
+            }
+            console.log('[抖音一键拉黑] 批量结束, blockVideoAuthorAfterBatch=', blockVideoAuthorAfterBatch, ' authorSecUid=', authorSecUid, ' 已处理=', batchBlockState.processedUids.has(authorSecUid));
+
+            if (blockVideoAuthorAfterBatch && authorSecUid && !batchBlockState.processedUids.has(authorSecUid)) {
+                batchBlockState.phaseLabel = '拉黑视频作者…';
+                updateBatchIndicator();
+                try {
+                    const result = await blockUser(authorSecUid, false, true);
+                    if (result && result.success) {
+                        batchBlockState.stats.success++;
+                        // 同步更新作者评论按钮的状态
+                        if (batchBlockState.authorBtn && batchBlockState.authorBtn.isConnected) {
+                            markCommentBtnBlocked(batchBlockState.authorBtn);
+                        }
+                        // 同时更新页面上所有"作者标记"的评论按钮
+                        updateAuthorCommentBtns(authorSecUid);
+                        // 同步更新视频详情页作者拉黑按钮的状态（与点击"不感兴趣"那条独立按钮）
+                        try {
+                            const detailBtn = document.querySelector('.douyin-video-detail-block-btn');
+                            if (detailBtn && detailBtn.dataset.blocked !== 'true') {
+                                detailBtn.dataset.blocked = 'true';
+                                detailBtn.style.color = '#fe2c55';
+                                detailBtn.title = '已拉黑';
+                            }
+                        } catch (e) {}
+                        // 记录作者拉黑
+                        try {
+                            const nick = batchBlockState.authorBtn ? extractNicknameFromBtn(batchBlockState.authorBtn) : '';
+                            const avatar = batchBlockState.authorBtn ? extractAvatarFromBtn(batchBlockState.authorBtn) : '';
+                            recordBlockedUser(enrichAuthorInfo({
+                                secUid: authorSecUid,
+                                nickname: nick,
+                                avatar: avatar
+                            }), 'batch-author');
+                        } catch (e) {}
+                    } else {
+                        batchBlockState.stats.failed++;
+                    }
+                } catch (e) {
+                    batchBlockState.stats.failed++;
+                }
+                updateBatchIndicator();
+            } else if (blockVideoAuthorAfterBatch && !authorSecUid) {
+                batchBlockState.phaseLabel = '未识别到视频作者';
+                updateBatchIndicator();
+            }
+
+            setTimeout(() => {
+                hideBatchBlockIndicator();
+                const { success, failed } = batchBlockState.stats;
+                showToast(`批量拉黑结束：成功 ${success}，失败 ${failed}`);
+            }, 600);
+        }
+
+        // 60秒后清空已处理集合，避免内存泄漏
+        setTimeout(() => {
+            batchBlockState.processedUids.clear();
+            batchBlockState.stats = { success: 0, failed: 0, authorPending: 0 };
+        }, 60000);
+    }
+
+    // 等待批处理空闲（队列执行完）
+    function waitForBatchIdle(maxWait = 5000) {
+        return new Promise((resolve) => {
+            const t0 = Date.now();
+            const tick = () => {
+                if (!batchBlockState.running || (Date.now() - t0) > maxWait) {
+                    resolve();
+                    return;
+                }
+                setTimeout(tick, 100);
+            };
+            tick();
+        });
+    }
+
+    // 标记评论按钮为"已拉黑"状态（含过渡动画）
+    function markCommentBtnBlocked(btn) {
+        if (!btn || !btn.isConnected) return;
+        try {
+            btn.dataset.blocked = 'true';
+            btn.classList.remove('blocked');
+            btn.classList.add('blocked', 'batch-just-blocked');
+            btn.title = '已拉黑';
+            // 图标颜色：与普通已拉黑态一致
+            const svg = btn.querySelector('svg');
+            if (svg) {
+                const path = svg.querySelector('path');
+                if (path) path.setAttribute('fill', '#ff4444');
+            }
+            setTimeout(() => btn.classList.remove('batch-just-blocked'), 500);
+        } catch (e) {}
+    }
+
+    // 批量更新页面上所有作者评论按钮(给作者评论添加 data-author-comment 标记)
+    function updateAuthorCommentBtns(authorSecUid) {
+        if (!authorSecUid) return;
+        const btns = document.querySelectorAll('.douyin-comment-block-btn[data-author-comment="true"]');
+        btns.forEach(btn => {
+            if (btn.dataset.secUid === authorSecUid) {
+                markCommentBtnBlocked(btn);
+            }
+        });
+    }
+
+    // 主并发批量拉黑队列 - 10 并发（可配置），作者评论延后
+    async function processBatchBlockQueue() {
+        if (batchBlockState.running) return;
+        batchBlockState.running = true;
+
+        const CONCURRENCY = batchConcurrency;
+        const authorSecUid = batchBlockState.authorSecUid;
+
+        while (batchBlockState.active) {
+            // 扫描所有未处理的评论按钮
+            const allBtns = Array.from(document.querySelectorAll('.douyin-comment-block-btn:not([data-blocked="true"])'));
+
+            // 把作者评论的按钮也识别出来（用于最后拉黑）
+            const authorBtns = [];
+            const normalBtns = [];
+            for (const btn of allBtns) {
+                const secUid = btn.dataset.secUid;
+                if (!secUid) continue;
+                if (batchBlockState.processedUids.has(secUid)) continue;
+
+                // 给按钮打上"作者评论"标记，便于后续状态同步
+                if (authorSecUid && secUid === authorSecUid) {
+                    btn.dataset.authorComment = 'true';
+                    authorBtns.push(btn);
+                } else {
+                    normalBtns.push(btn);
+                }
+            }
+
+            // 记录作者评论数量（用于指示器）
+            if (authorBtns.length > 0) {
+                batchBlockState.authorPending = true;
+                batchBlockState.stats.authorPending = authorBtns.length;
+                // 记录第一个作者按钮用于停止后拉黑作者
+                if (!batchBlockState.authorBtn) {
+                    batchBlockState.authorBtn = authorBtns[0];
+                }
+            } else {
+                batchBlockState.stats.authorPending = 0;
+            }
+
+            // 优先拉黑非作者评论
+            if (normalBtns.length === 0) {
+                batchBlockState.phaseLabel = authorBtns.length > 0
+                    ? '已识别作者评论，长按结束后再拉黑…'
+                    : '等待新评论…';
+                updateBatchIndicator();
+                await new Promise(r => setTimeout(r, 300));
+                continue;
+            }
+
+            batchBlockState.phaseLabel = authorBtns.length > 0
+                ? `拉黑普通评论中（${authorBtns.length} 条作者评论待最后处理）`
+                : '拉黑评论中…';
+            updateBatchIndicator();
+
+            // 并发执行
+            const queue = normalBtns.slice();
+            const workers = [];
+            for (let i = 0; i < CONCURRENCY; i++) {
+                workers.push((async () => {
+                    while (batchBlockState.active && queue.length > 0) {
+                        const btn = queue.shift();
+                        if (!btn) break;
+                        if (!batchBlockState.active) break;
+                        if (btn.dataset.blocked === 'true') continue;
+                        const secUid = btn.dataset.secUid;
+                        if (!secUid) continue;
+                        if (batchBlockState.processedUids.has(secUid)) continue;
+                        batchBlockState.processedUids.add(secUid);
+
+                        try {
+                            const result = await blockUser(secUid, false, true);
+                            if (result && result.success) {
+                                batchBlockState.stats.success++;
+                                if (btn.isConnected) markCommentBtnBlocked(btn);
+                                // 记录到拉黑日志
+                                try {
+                                    const info = enrichAuthorInfo({
+                                        secUid: secUid,
+                                        nickname: extractNicknameFromBtn(btn),
+                                        avatar: extractAvatarFromBtn(btn)
+                                    });
+                                    recordBlockedUser(info, 'batch');
+                                } catch (e) {}
+                            } else {
+                                batchBlockState.stats.failed++;
+                            }
+                        } catch (e) {
+                            batchBlockState.stats.failed++;
+                        }
+
+                        // 减少频率：每 3 个成功/失败刷新一次指示器
+                        if ((batchBlockState.stats.success + batchBlockState.stats.failed) % 3 === 0) {
+                            updateBatchIndicator();
+                        }
+                    }
+                })());
+            }
+            await Promise.all(workers);
+
+            // 退出条件：用户已松开
+            if (!batchBlockState.active) break;
+
+            // 一轮跑完，短暂休息后继续扫描（支持动态加载的新评论）
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        hideBatchBlockIndicator();
+        batchBlockState.running = false;
+    }
+
     // 键盘快捷键功能
     const STORAGE_KEY = 'douyin-block-shortcut-key';
     const STORAGE_MODIFIERS_KEY = 'douyin-block-shortcut-modifiers';
     const STORAGE_COMMENT_SHORTCUT_KEY = 'douyin-block-comment-shortcut-enabled';
+    const STORAGE_LONG_PRESS_MS = 'douyin-block-longpress-ms';
+    const STORAGE_BATCH_CONCURRENCY = 'douyin-block-batch-concurrency';
+    const STORAGE_BLOCK_VIDEO_AUTHOR = 'douyin-block-block-video-author';
+    const STORAGE_BLOCK_WORDS = 'douyin-block-words';
+    const STORAGE_BLOCK_WORD_ENABLED = 'douyin-block-word-enabled';
+    const STORAGE_HIDE_ON_BLOCK_WORD = 'douyin-block-hide-on-blockword';
+    const STORAGE_LOG_BLOCKED = 'douyin-block-log-enabled';
+    const STORAGE_LOG_DATA = 'douyin-block-log-data';
+    // const STORAGE_AUTO_DISLIKE = 'douyin-block-auto-dislike'; // 已注释：自动不感兴趣功能不完善
     let blockShortcutKey = localStorage.getItem(STORAGE_KEY) || 'Q';
     let blockShortcutModifiers = JSON.parse(localStorage.getItem(STORAGE_MODIFIERS_KEY) || '{}');
     let commentShortcutEnabled = localStorage.getItem(STORAGE_COMMENT_SHORTCUT_KEY) !== 'false'; // 默认开启
+    let batchLongPressMs = parseInt(localStorage.getItem(STORAGE_LONG_PRESS_MS) || '5000', 10);
+    // let autoDislikeOnBlock = localStorage.getItem(STORAGE_AUTO_DISLIKE) === 'true'; // 已注释
+    if (!Number.isFinite(batchLongPressMs) || batchLongPressMs < 500) batchLongPressMs = 5000;
+    let batchConcurrency = parseInt(localStorage.getItem(STORAGE_BATCH_CONCURRENCY) || '10', 10);
+    if (!Number.isFinite(batchConcurrency) || batchConcurrency < 1) batchConcurrency = 10;
+    if (batchConcurrency > 50) batchConcurrency = 50;
+    let blockVideoAuthorAfterBatch = localStorage.getItem(STORAGE_BLOCK_VIDEO_AUTHOR) !== 'false'; // 默认开启
+    // 关键词拉黑相关
+    let blockWords = [];
+    try {
+        const raw = localStorage.getItem(STORAGE_BLOCK_WORDS) || '';
+        blockWords = raw.split('\n').map(s => s.trim()).filter(Boolean);
+    } catch (e) { blockWords = []; }
+    let blockWordEnabled = localStorage.getItem(STORAGE_BLOCK_WORD_ENABLED) === 'true';
+    let hideCommentsOnBlockWord = localStorage.getItem(STORAGE_HIDE_ON_BLOCK_WORD) !== 'false'; // 默认隐藏
+    // 拉黑日志相关
+    let logBlockedEnabled = localStorage.getItem(STORAGE_LOG_BLOCKED) === 'true';
+    let blockLog = [];
+    try {
+        const raw = localStorage.getItem(STORAGE_LOG_DATA) || '[]';
+        blockLog = JSON.parse(raw);
+        if (!Array.isArray(blockLog)) blockLog = [];
+    } catch (e) { blockLog = []; }
+    if (blockLog.length > 5000) blockLog = blockLog.slice(0, 5000); // 上限保护
+
+    function saveBlockWords() {
+        try {
+            localStorage.setItem(STORAGE_BLOCK_WORDS, blockWords.join('\n'));
+        } catch (e) {}
+    }
+    function saveBlockLog() {
+        try {
+            localStorage.setItem(STORAGE_LOG_DATA, JSON.stringify(blockLog));
+        } catch (e) {}
+    }
+    // 记录一条拉黑日志（去重 secUid + 时间聚合）
+    function recordBlockedUser(info, source) {
+        if (!logBlockedEnabled) return;
+        if (!info || !info.secUid) return;
+        // 查找现有记录
+        const existing = blockLog.find(r => r.secUid === info.secUid);
+        if (existing) {
+            existing.count = (existing.count || 1) + 1;
+            existing.lastTime = Date.now();
+            if (source) existing.lastSource = source;
+        } else {
+            blockLog.unshift({
+                secUid: info.secUid,
+                userId: info.userId || '',
+                nickname: info.nickname || '',
+                avatar: info.avatar || '',
+                profileUrl: info.profileUrl || ('https://www.douyin.com/user/' + info.secUid),
+                firstTime: Date.now(),
+                lastTime: Date.now(),
+                count: 1,
+                lastSource: source || 'manual'
+            });
+            if (blockLog.length > 5000) blockLog.length = 5000;
+        }
+        saveBlockLog();
+    }
+    // 从作者信息推断 profileUrl 与可能的 avatar（不阻塞主流程）
+    function enrichAuthorInfo(info) {
+        if (!info) return info;
+        if (!info.profileUrl && info.secUid) {
+            info.profileUrl = 'https://www.douyin.com/user/' + info.secUid;
+        }
+        return info;
+    }
 
     // 功能键映射表
     const FUNCTION_KEY_MAP = {
@@ -2897,6 +4579,164 @@
         if (activeElement.isContentEditable) return true;
         if (activeElement.hasAttribute('contenteditable')) return true;
         return false;
+    }
+
+    // HTML 转义
+    function escapeHtml(s) {
+        if (s == null) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    // 格式化时间戳为可读字符串
+    function formatTime(ts) {
+        if (!ts) return '-';
+        try {
+            const d = new Date(ts);
+            const pad = n => (n < 10 ? '0' + n : '' + n);
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        } catch (e) { return '-'; }
+    }
+
+    // 来源翻译
+    function sourceLabel(s) {
+        switch (s) {
+            case 'manual': return '手动';
+            case 'manual-unblock': return '解除';
+            case 'batch': return '批量';
+            case 'batch-author': return '批量-作者';
+            default:
+                if (s && s.startsWith('keyword:')) return '关键词(' + s.slice(8) + ')';
+                return s || '-';
+        }
+    }
+
+    // 拉黑日志页
+    function openBlockLogPage() {
+        if (document.querySelector('.douyin-block-log-overlay')) {
+            return;
+        }
+        // 拉取最新数据
+        try {
+            const raw = localStorage.getItem(STORAGE_LOG_DATA) || '[]';
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) blockLog = parsed;
+        } catch (e) {}
+
+        const overlay = document.createElement('div');
+        overlay.className = 'douyin-block-log-overlay douyin-block-settings-overlay';
+        const total = blockLog.length;
+        const itemsHtml = blockLog.slice(0, 500).map((r, idx) => {
+            const profileUrl = r.profileUrl || ('https://www.douyin.com/user/' + r.secUid);
+            const nickname = escapeHtml(r.nickname || '未记录昵称');
+            const avatar = r.avatar || '';
+            const avatarHtml = avatar
+                ? `<img src="${escapeHtml(avatar)}" referrerpolicy="no-referrer" style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#333;flex-shrink:0;" onerror="this.style.display='none'">`
+                : `<div style="width:40px;height:40px;border-radius:50%;background:#333;flex-shrink:0;"></div>`;
+            return `
+                <div class="douyin-block-log-item" data-sec-uid="${escapeHtml(r.secUid)}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:#222;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:8px;">
+                    ${avatarHtml}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:14px;color:#f5f5f5;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nickname}</div>
+                        <div style="font-size:11px;color:#888;margin-top:2px;">${escapeHtml(sourceLabel(r.lastSource))} · ${escapeHtml(formatTime(r.lastTime))} · 累计 ${r.count || 1} 次</div>
+                        <a href="${escapeHtml(profileUrl)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:#888;text-decoration:none;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(profileUrl)}</a>
+                    </div>
+                    <button class="log-unblock-btn" data-sec-uid="${escapeHtml(r.secUid)}" style="background:transparent;border:1px solid #555;color:#bbb;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:12px;flex-shrink:0;">解除拉黑</button>
+                </div>
+            `;
+        }).join('');
+
+        overlay.innerHTML = `
+            <div class="douyin-block-log-panel" style="background:#1a1a1a;border-radius:12px;padding:20px;min-width:520px;max-width:680px;max-height:80vh;color:#fff;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid #333;display:flex;flex-direction:column;">
+                <div class="douyin-block-settings-title" style="margin-bottom:12px;">
+                    <span>拉黑记录（${total}）</span>
+                    <span class="douyin-block-settings-close">×</span>
+                </div>
+                <div style="display:flex;gap:8px;margin-bottom:10px;">
+                    <input id="log-search-input" type="text" placeholder="搜索昵称或sec_uid" style="flex:1;background:#2a2a2a;color:#fff;border:1px solid #333;border-radius:6px;padding:6px 10px;font-size:13px;">
+                    <button id="log-clear-all" style="background:#2a2a2a;color:#bbb;border:1px solid #555;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;">清除记录</button>
+                </div>
+                <div class="douyin-block-log-list" style="overflow-y:auto;flex:1;padding-right:4px;">
+                    ${itemsHtml || '<div style="text-align:center;color:#666;padding:40px 0;font-size:13px;">暂无拉黑记录</div>'}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+
+        const closeBtn = overlay.querySelector('.douyin-block-settings-close');
+        const searchInput = overlay.querySelector('#log-search-input');
+        const clearAllBtn = overlay.querySelector('#log-clear-all');
+        const list = overlay.querySelector('.douyin-block-log-list');
+
+        closeBtn.addEventListener('click', () => overlay.remove());
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) overlay.remove();
+        });
+
+        // 搜索过滤
+        searchInput.addEventListener('input', (e) => {
+            const q = (e.target.value || '').trim().toLowerCase();
+            const allItems = list.querySelectorAll('.douyin-block-log-item');
+            allItems.forEach(it => {
+                if (!q) {
+                    it.style.display = '';
+                } else {
+                    const sec = (it.dataset.secUid || '').toLowerCase();
+                    const text = (it.textContent || '').toLowerCase();
+                    it.style.display = (sec.includes(q) || text.includes(q)) ? '' : 'none';
+                }
+            });
+        });
+
+        // 单条解除拉黑（事件委托）
+        list.addEventListener('click', async (e) => {
+            const btn = e.target.closest('.log-unblock-btn');
+            if (!btn) return;
+            const sec = btn.dataset.secUid;
+            if (!sec) return;
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '解除中…';
+            try {
+                const result = await blockUser(sec, true, true);
+                if (result && result.success) {
+                    blockLog = blockLog.filter(r => r.secUid !== sec);
+                    saveBlockLog();
+                    const item = btn.closest('.douyin-block-log-item');
+                    if (item) item.remove();
+                    const title = overlay.querySelector('.douyin-block-settings-title span');
+                    if (title) title.textContent = '拉黑记录（' + blockLog.length + '）';
+                    showToast('已解除拉黑');
+                } else {
+                    showToast('解除失败，请稍后重试');
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            } catch (err) {
+                console.error('[抖音一键拉黑] 解除拉黑异常:', err);
+                showToast('解除失败：' + (err && err.message ? err.message : '未知错误'));
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        });
+
+        // 清除记录
+        clearAllBtn.addEventListener('click', () => {
+            if (blockLog.length === 0) {
+                showToast('暂无拉黑记录');
+                return;
+            }
+            if (!confirm('确定清除全部 ' + blockLog.length + ' 条拉黑记录？此操作仅清除本地记录，不会解除拉黑。')) return;
+            blockLog = [];
+            saveBlockLog();
+            list.innerHTML = '<div style="text-align:center;color:#666;padding:40px 0;font-size:13px;">暂无拉黑记录</div>';
+            const title = overlay.querySelector('.douyin-block-settings-title span');
+            if (title) title.textContent = '拉黑记录（0）';
+        });
     }
 
     function normalizeKey(key) {
@@ -2996,6 +4836,77 @@
         return !!commentArea;
     }
 
+    // ========== 不感兴趣（纯函数触发）==========
+    // 整个功能块已注释：自动不感兴趣存在缺陷（视频菜单调出会跳页/按钮消失；评论区 API 行为不一致）
+    // 三个函数（triggerVideoDislike / triggerCommentDislike / triggerDislike）保留代码，等待未来抖音 UI 稳定后再启用
+    /*
+    function triggerVideoDislike() {
+        try {
+            // 1. 直接在页面上找"不感兴趣"文字的菜单项
+            const items = document.querySelectorAll('.fzhg3Mci');
+            for (const it of items) {
+                const label = (it.textContent || '').trim();
+                if (label.includes('不感兴趣')) {
+                    it.click();
+                    console.log('[抖音一键拉黑] 已点击视频"不感兴趣"');
+                    return true;
+                }
+            }
+            // 2. 兜底：通过文本搜索
+            const allEls = document.querySelectorAll('div, span, li');
+            for (const el of allEls) {
+                if (el.children.length > 3) continue;
+                const text = (el.textContent || '').trim();
+                if (text === '不感兴趣' || text === '不感兴趣（R）') {
+                    el.click();
+                    console.log('[抖音一键拉黑] 已点击视频"不感兴趣"（文本匹配）');
+                    return true;
+                }
+            }
+            // 3. 模拟键盘 R 键（用户提供的 UI 显示 R 键）
+            const rEvt = new KeyboardEvent('keydown', { key: 'r', code: 'KeyR', bubbles: true, cancelable: true });
+            document.dispatchEvent(rEvt);
+            return true;
+        } catch (e) {
+            console.error('[抖音一键拉黑] 视频不感兴趣触发失败:', e);
+            return false;
+        }
+    }
+
+    function triggerCommentDislike(commentItem) {
+        try {
+            if (!commentItem) {
+                // 兜底：找当前焦点评论或最近评论
+                commentItem = document.querySelector('[data-e2e="comment-item"]:hover, [data-e2e="comment-item"].focused, .comment-item:hover');
+            }
+            if (commentItem) {
+                // 1. 直接点 .lA1t997_（不喜欢按钮）
+                const dislikeBtn = commentItem.querySelector('.lA1t997_, [data-e2e="comment-dislike"]');
+                if (dislikeBtn) {
+                    dislikeBtn.click();
+                    console.log('[抖音一键拉黑] 已点击评论"不感兴趣"');
+                    return true;
+                }
+                // 2. 兜底：点更多按钮然后选"不感兴趣"
+                const moreBtn = commentItem.querySelector('[data-e2e="video-comment-more"], .l_udJNgz');
+                if (moreBtn) moreBtn.click();
+            }
+            return false;
+        } catch (e) {
+            console.error('[抖音一键拉黑] 评论不感兴趣触发失败:', e);
+            return false;
+        }
+    }
+
+    // 触发不感兴趣（统一入口，自动判断视频/评论）
+    function triggerDislike(targetItem) {
+        if (targetItem && (targetItem.matches?.('[data-e2e="comment-item"]') || targetItem.closest?.('[data-e2e="comment-item"]'))) {
+            return triggerCommentDislike(targetItem.closest('[data-e2e="comment-item"]'));
+        }
+        return triggerVideoDislike();
+    }
+    */
+
     function triggerBlockFromShortcut() {
         // 1. 优先检查焦点所在的按钮
         const focusedBtn = getFocusedBlockButton();
@@ -3078,14 +4989,154 @@
             return true;
         }
 
-        // 7. 默认：首页视频作者
-        const blockBtns = document.querySelectorAll('.douyin-block-btn');
-        if (blockBtns.length > 0) {
-            blockBtns[0].click();
+        // 7. 默认：首页视频作者 - 找到当前可见的视频按钮
+        const visibleBlockBtn = findVisibleBlockButton();
+        if (visibleBlockBtn) {
+            visibleBlockBtn.click();
             return true;
         }
 
         return false;
+    }
+
+    // 找到当前可见的拉黑按钮（解决刷视频后快捷键拉黑错误作者的问题）
+    function findVisibleBlockButton() {
+        const blockBtns = document.querySelectorAll('.douyin-block-btn');
+        if (blockBtns.length === 0) return null;
+        if (blockBtns.length === 1) return blockBtns[0];
+
+        // 首先尝试找到当前活动的视频容器
+        const activeVideoContainer = findActiveVideoContainer();
+        if (activeVideoContainer) {
+            // 在活动视频容器内查找拉黑按钮
+            const btnInContainer = activeVideoContainer.querySelector('.douyin-block-btn');
+            if (btnInContainer) {
+                console.log('[抖音一键拉黑] 在活动视频容器内找到按钮');
+                return btnInContainer;
+            }
+        }
+
+        // 如果无法确定活动容器，使用距离中心最近的方法
+        return findClosestButtonToCenter(blockBtns);
+    }
+
+    // 查找当前活动的视频容器（360浏览器兼容版）
+    function findActiveVideoContainer() {
+        try {
+            // 方法1：查找正在播放的视频元素
+            const videos = document.querySelectorAll('video');
+            for (let i = 0; i < videos.length; i++) {
+                const video = videos[i];
+                // 检查视频是否正在播放且可见（兼容360浏览器）
+                if (video && !video.paused && video.currentTime > 0) {
+                    const rect = video.getBoundingClientRect();
+                    // 视频必须在视口内且足够大（当前视频）
+                    if (rect.top >= -rect.height * 0.5 && rect.bottom <= window.innerHeight + rect.height * 0.5) {
+                        if (rect.height > 100) { // 确保是主视频而不是小窗口
+                            // 向上查找包含该视频的容器
+                            let container = video.parentElement;
+                            let depth = 0;
+                            while (container && depth < 10) {
+                                // 检查容器是否包含点赞按钮，确认是视频卡片
+                                if (container.querySelector && container.querySelector('[data-e2e="video-player-digg"]')) {
+                                    return container;
+                                }
+                                container = container.parentElement;
+                                depth++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 方法2：查找包含可见点赞按钮的容器（当前视频通常有可见的点赞按钮）
+            const diggButtons = document.querySelectorAll('[data-e2e="video-player-digg"]');
+            for (let i = 0; i < diggButtons.length; i++) {
+                const diggBtn = diggButtons[i];
+                const rect = diggBtn.getBoundingClientRect();
+                let style;
+                try {
+                    style = window.getComputedStyle(diggBtn);
+                } catch (e) {
+                    continue; // 360浏览器兼容性处理
+                }
+                // 点赞按钮必须在视口中心附近且可见
+                if (rect.top > window.innerHeight * 0.3 && rect.top < window.innerHeight * 0.8) {
+                    const opacity = style.opacity ? parseFloat(style.opacity) : 1;
+                    if (style.display !== 'none' && style.visibility !== 'hidden' && opacity > 0.5) {
+                        // 向上查找容器
+                        let container = diggBtn.parentElement;
+                        let depth = 0;
+                        while (container && depth < 10) {
+                            if (container.querySelector && container.querySelector('.douyin-block-btn')) {
+                                return container;
+                            }
+                            container = container.parentElement;
+                            depth++;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.log('[抖音一键拉黑] 查找活动视频容器时出错:', e);
+        }
+
+        return null;
+    }
+
+    // 查找距离视口中心最近的按钮（360浏览器兼容版）
+    function findClosestButtonToCenter(blockBtns) {
+        try {
+            const viewportCenterX = window.innerWidth / 2;
+            const viewportCenterY = window.innerHeight / 2;
+
+            let bestBtn = null;
+            let minDistance = Infinity;
+
+            for (let i = 0; i < blockBtns.length; i++) {
+                const btn = blockBtns[i];
+                const rect = btn.getBoundingClientRect();
+
+                // 检查按钮是否在视口内且可见
+                if (rect.width === 0 || rect.height === 0) continue;
+                if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+                if (rect.right < 0 || rect.left > window.innerWidth) continue;
+
+                // 检查按钮是否被隐藏（360浏览器兼容性处理）
+                let style;
+                try {
+                    style = window.getComputedStyle(btn);
+                } catch (e) {
+                    continue;
+                }
+                const opacity = style.opacity ? parseFloat(style.opacity) : 1;
+                if (style.display === 'none' || style.visibility === 'hidden' || opacity === 0) continue;
+
+                // 计算按钮中心点
+                const btnCenterX = rect.left + rect.width / 2;
+                const btnCenterY = rect.top + rect.height / 2;
+
+                // 计算与视口中心的距离
+                const distanceToCenter = Math.sqrt(
+                    Math.pow(btnCenterX - viewportCenterX, 2) +
+                    Math.pow(btnCenterY - viewportCenterY, 2)
+                );
+
+                if (distanceToCenter < minDistance) {
+                    minDistance = distanceToCenter;
+                    bestBtn = btn;
+                }
+            }
+
+            if (bestBtn) {
+                console.log('[抖音一键拉黑] 选中距离中心最近的按钮，距离:', minDistance);
+            }
+
+            return bestBtn || blockBtns[0];
+        } catch (e) {
+            console.log('[抖音一键拉黑] 查找最近按钮时出错:', e);
+            return blockBtns[0];
+        }
     }
 
     function handleShortcutKey(e) {
@@ -3104,12 +5155,9 @@
                 return;
             }
             e.preventDefault();
-            const triggered = triggerBlockFromShortcut();
-            if (triggered) {
-                console.log('[抖音一键拉黑] 快捷键触发成功');
-            } else {
-                console.log('[抖音一键拉黑] 未找到可拉黑的用户');
-            }
+
+            // 启动长按批量检测
+            startBatchBlock();
         }
     }
 
@@ -3124,24 +5172,73 @@
         const overlay = document.createElement('div');
         overlay.className = 'douyin-block-settings-overlay';
         overlay.innerHTML = `
-            <div class="douyin-block-settings-panel">
+            <div class="douyin-block-settings-panel" style="max-height: 88vh; overflow-y: auto;">
                 <div class="douyin-block-settings-title">
                     <span>拉黑快捷键设置</span>
-                    <span class="douyin-block-settings-close">✕</span>
+                    <span class="douyin-block-settings-close">×</span>
                 </div>
                 <div class="douyin-block-settings-row">
                     <span class="douyin-block-settings-label">快捷键</span>
                     <input type="text" class="douyin-block-settings-input" id="block-shortcut-input" value="${getShortcutDisplayName()}" placeholder="按组合键">
                 </div>
-                <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #333;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">允许快捷键拉黑评论区用户<br><span style="font-size: 11px; color: #888;">（关闭后快捷键不会拉黑评论区用户）</span></span>
-                    <label class="douyin-block-settings-switch" style="position: relative; display: inline-block; width: 44px; height: 24px;">
-                        <input type="checkbox" id="comment-shortcut-toggle" ${commentShortcutEnabled ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;">
-                        <span class="douyin-block-settings-slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: ${commentShortcutEnabled ? '#fe2c55' : '#444'}; transition: .3s; border-radius: 24px;"></span>
+                <div class="douyin-block-settings-row" style="margin-top: 12px;">
+                    <span class="douyin-block-settings-label" style="flex: 1;">长按触发批量时间<br><span style="font-size: 11px; color: #888;">（按住快捷键多久后进入批量拉黑，单位：毫秒，最小 500）</span></span>
+                    <input type="number" min="500" max="60000" step="100" class="douyin-block-settings-input" id="longpress-input" value="${batchLongPressMs}" style="width:90px;">
+                </div>
+                <div class="douyin-block-settings-row" style="margin-top: 12px;">
+                    <span class="douyin-block-settings-label" style="flex: 1;">批量并发数量<br><span style="font-size: 11px; color: #888;">（同时拉黑多少个用户，建议 3-15，过高可能触发风控）</span></span>
+                    <input type="number" min="1" max="50" step="1" class="douyin-block-settings-input" id="concurrency-input" value="${batchConcurrency}" style="width:90px;">
+                </div>
+                <div class="douyin-block-settings-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #333;">
+                    <span class="douyin-block-settings-label" style="flex: 1;">批量拉黑后拉黑视频作者<br><span style="font-size: 11px; color: #888;">（评论区批量拉黑结束后，把该视频的作者也一并拉黑）</span></span>
+                    <label class="douyin-block-settings-switch">
+                        <input type="checkbox" id="author-block-toggle" ${blockVideoAuthorAfterBatch ? 'checked' : ''}>
+                        <span class="douyin-block-settings-slider" id="author-block-slider"></span>
                     </label>
                 </div>
-                <div class="douyin-block-settings-hint">点击输入框后按组合键设置<br>支持: Ctrl+Q, Alt+Q, Ctrl+Alt+Q, Shift+F4 等<br>右键点击拉黑按钮可打开设置<br>按 ESC 关闭设置</div>
-                <button class="douyin-block-settings-save">保存</button>
+                <div class="douyin-block-settings-row" style="margin-top: 12px;">
+                    <span class="douyin-block-settings-label" style="flex: 1;">允许快捷键拉黑评论区用户<br><span style="font-size: 11px; color: #888;">（关闭后快捷键不会拉黑评论区用户）</span></span>
+                    <label class="douyin-block-settings-switch">
+                        <input type="checkbox" id="comment-shortcut-toggle" ${commentShortcutEnabled ? 'checked' : ''}>
+                        <span class="douyin-block-settings-slider" id="comment-shortcut-slider"></span>
+                    </label>
+                </div>
+                <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #333;">
+                    <span class="douyin-block-settings-label" style="flex: 1;">关键词自动拉黑<br><span style="font-size: 11px; color: #888;">（评论命中关键词自动拉黑该用户）</span></span>
+                    <label class="douyin-block-settings-switch">
+                        <input type="checkbox" id="word-block-toggle" ${blockWordEnabled ? 'checked' : ''}>
+                        <span class="douyin-block-settings-slider" id="word-block-slider"></span>
+                    </label>
+                </div>
+                <div class="douyin-block-settings-row" style="margin-top: 12px; align-items: flex-start;">
+                    <span class="douyin-block-settings-label" style="flex: 1; padding-right: 10px;">屏蔽词列表<br><span style="font-size: 11px; color: #888;">（一行一个关键词，命中即拉黑）</span></span>
+                </div>
+                <textarea id="block-words-input" placeholder="一行一个关键词" style="width:100%;min-height:90px;max-height:160px;box-sizing:border-box;background:#2a2a2a;color:#fff;border:1px solid #333;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;font-family:inherit;">${blockWords.map(w => escapeHtml(w)).join('\n')}</textarea>
+                <div class="douyin-block-settings-row" style="margin-top: 8px;">
+                    <span class="douyin-block-settings-label" style="flex: 1;">命中后隐藏该评论<br><span style="font-size: 11px; color: #888;">（关闭后只标记不隐藏）</span></span>
+                    <label class="douyin-block-settings-switch">
+                        <input type="checkbox" id="word-hide-toggle" ${hideCommentsOnBlockWord ? 'checked' : ''}>
+                        <span class="douyin-block-settings-slider" id="word-hide-slider"></span>
+                    </label>
+                </div>
+                <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #333;">
+                    <span class="douyin-block-settings-label" style="flex: 1;">记录拉黑操作<br><span style="font-size: 11px; color: #888;">（开启后所有拉黑的用户会保存到日志，可查看/清除）</span></span>
+                    <label class="douyin-block-settings-switch">
+                        <input type="checkbox" id="log-block-toggle" ${logBlockedEnabled ? 'checked' : ''}>
+                        <span class="douyin-block-settings-slider" id="log-block-slider"></span>
+                    </label>
+                </div>
+                <div class="douyin-block-settings-row" style="margin-top: 8px;">
+                    <button id="open-block-log-btn" class="douyin-block-settings-save" style="background:#2a2a2a;margin-top:0;flex:1;">查看拉黑记录（${blockLog.length}）</button>
+                </div>
+                <div class="douyin-block-settings-hint">
+                    点击输入框后按组合键设置<br>
+                    支持: Ctrl+Q, Alt+Q, Ctrl+Alt+Q, Shift+F4 等<br>
+                    右键点击拉黑按钮可打开设置<br>
+                    按 ESC 关闭设置<br><br>
+                    <b style="color:#ccc;">长按快捷键可批量拉黑评论区所有用户，松开后收尾</b>
+                </div>
+                <button id="douyin-block-settings-save-btn" class="douyin-block-settings-save">保存</button>
             </div>
         `;
 
@@ -3150,14 +5247,35 @@
 
         const input = overlay.querySelector('#block-shortcut-input');
         const closeBtn = overlay.querySelector('.douyin-block-settings-close');
-        const saveBtn = overlay.querySelector('.douyin-block-settings-save');
+        const saveBtn = overlay.querySelector('#douyin-block-settings-save-btn');
         const commentToggle = overlay.querySelector('#comment-shortcut-toggle');
-        const slider = overlay.querySelector('.douyin-block-settings-slider');
+        const longpressInput = overlay.querySelector('#longpress-input');
+        const concurrencyInput = overlay.querySelector('#concurrency-input');
+        const authorToggle = overlay.querySelector('#author-block-toggle');
+        const wordToggle = overlay.querySelector('#word-block-toggle');
+        const wordsInput = overlay.querySelector('#block-words-input');
+        const wordHideToggle = overlay.querySelector('#word-hide-toggle');
+        const logToggle = overlay.querySelector('#log-block-toggle');
+        const openLogBtn = overlay.querySelector('#open-block-log-btn');
+        // const autoDislikeToggle = overlay.querySelector('#auto-dislike-toggle'); // 已注释：自动不感兴趣功能不完善
+
+        if (!saveBtn) {
+            console.error('[抖音一键拉黑] 未找到保存按钮，初始化失败');
+            return;
+        }
 
         // 临时存储当前设置
         let tempKey = blockShortcutKey;
         let tempModifiers = { ...blockShortcutModifiers };
         let tempCommentEnabled = commentShortcutEnabled;
+        let tempLongPressMs = batchLongPressMs;
+        let tempConcurrency = batchConcurrency;
+        let tempAuthorBlock = blockVideoAuthorAfterBatch;
+        let tempWordEnabled = blockWordEnabled;
+        let tempWordsText = wordsInput.value;
+        let tempHideOnWord = hideCommentsOnBlockWord;
+        let tempLogEnabled = logBlockedEnabled;
+        // let tempAutoDislike = autoDislikeOnBlock; // 已注释：自动不感兴趣功能不完善
 
         input.focus();
         input.select();
@@ -3165,7 +5283,62 @@
         // 评论区开关切换
         commentToggle.addEventListener('change', (e) => {
             tempCommentEnabled = e.target.checked;
-            slider.style.backgroundColor = tempCommentEnabled ? '#fe2c55' : '#444';
+        });
+
+        // 作者拉黑开关切换
+        authorToggle.addEventListener('change', (e) => {
+            tempAuthorBlock = e.target.checked;
+        });
+
+        // 关键词开关切换
+        wordToggle.addEventListener('change', (e) => {
+            tempWordEnabled = e.target.checked;
+        });
+
+        // 命中后隐藏开关
+        wordHideToggle.addEventListener('change', (e) => {
+            tempHideOnWord = e.target.checked;
+        });
+
+        // 日志开关
+        logToggle.addEventListener('change', (e) => {
+            tempLogEnabled = e.target.checked;
+        });
+
+        // 拉黑后自动"不感兴趣"开关 —— 已注释：功能不完善
+
+        // 关键词 textarea
+        wordsInput.addEventListener('input', (e) => {
+            tempWordsText = e.target.value;
+        });
+
+        // 长按时间输入实时校验
+        longpressInput.addEventListener('input', (e) => {
+            const v = parseInt(e.target.value, 10);
+            if (Number.isFinite(v) && v >= 500 && v <= 60000) {
+                tempLongPressMs = v;
+                longpressInput.style.borderColor = '#333';
+            } else {
+                longpressInput.style.borderColor = '#ff4444';
+            }
+        });
+
+        // 并发数输入实时校验
+        concurrencyInput.addEventListener('input', (e) => {
+            const v = parseInt(e.target.value, 10);
+            if (Number.isFinite(v) && v >= 1 && v <= 50) {
+                tempConcurrency = v;
+                concurrencyInput.style.borderColor = '#333';
+            } else {
+                concurrencyInput.style.borderColor = '#ff4444';
+            }
+        });
+
+        // 打开拉黑记录页
+        openLogBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            overlay.remove();
+            openBlockLogPage();
         });
 
         closeBtn.addEventListener('click', () => overlay.remove());
@@ -3173,18 +5346,67 @@
             if (e.target === overlay) overlay.remove();
         });
 
-        saveBtn.addEventListener('click', () => {
-            if (tempKey) {
+        saveBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[抖音一键拉黑] 保存按钮被点击');
+
+            if (!tempKey) {
+                showToast('请按组合键设置快捷键');
+                return;
+            }
+            // 校验
+            const finalLongPress = Math.max(500, Math.min(60000, tempLongPressMs || 5000));
+            const finalConcurrency = Math.max(1, Math.min(50, tempConcurrency || 10));
+
+            try {
                 blockShortcutKey = tempKey;
-                blockShortcutModifiers = tempModifiers;
-                commentShortcutEnabled = tempCommentEnabled;
+                blockShortcutModifiers = { ...tempModifiers };
+                commentShortcutEnabled = !!tempCommentEnabled;
+                batchLongPressMs = finalLongPress;
+                batchConcurrency = finalConcurrency;
+                blockVideoAuthorAfterBatch = !!tempAuthorBlock;
+                blockWordEnabled = !!tempWordEnabled;
+                blockWords = (tempWordsText || '').split('\n').map(s => s.trim()).filter(Boolean);
+                hideCommentsOnBlockWord = !!tempHideOnWord;
+                logBlockedEnabled = !!tempLogEnabled;
+                // autoDislikeOnBlock = !!tempAutoDislike; // 已注释：自动不感兴趣功能不完善
+
                 localStorage.setItem(STORAGE_KEY, blockShortcutKey);
                 localStorage.setItem(STORAGE_MODIFIERS_KEY, JSON.stringify(blockShortcutModifiers));
                 localStorage.setItem(STORAGE_COMMENT_SHORTCUT_KEY, commentShortcutEnabled);
+                localStorage.setItem(STORAGE_LONG_PRESS_MS, String(batchLongPressMs));
+                localStorage.setItem(STORAGE_BATCH_CONCURRENCY, String(batchConcurrency));
+                localStorage.setItem(STORAGE_BLOCK_VIDEO_AUTHOR, String(blockVideoAuthorAfterBatch));
+                localStorage.setItem(STORAGE_BLOCK_WORD_ENABLED, String(blockWordEnabled));
+                saveBlockWords();
+                localStorage.setItem(STORAGE_HIDE_ON_BLOCK_WORD, String(hideCommentsOnBlockWord));
+                localStorage.setItem(STORAGE_LOG_BLOCKED, String(logBlockedEnabled));
+                // localStorage.setItem(STORAGE_AUTO_DISLIKE, String(autoDislikeOnBlock)); // 已注释
+
                 showToast('设置已保存');
                 overlay.remove();
-            } else {
-                showToast('请按组合键设置快捷键');
+                // 保存后立即对新评论生效
+                processAllCommentsForBlockWord();
+            } catch (err) {
+                console.error('[抖音一键拉黑] 保存设置失败:', err);
+                showToast('保存失败：' + (err && err.message ? err.message : '未知错误'));
+            }
+        });
+
+        // 让保存按钮也能响应 Enter（避免被快捷键 input 抢走）
+        saveBtn.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                saveBtn.click();
+            }
+        });
+
+        // 面板整体键盘：Tab 焦点循环、Enter 默认提交
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target !== input) {
+                e.preventDefault();
+                saveBtn.click();
             }
         });
 
@@ -3193,6 +5415,7 @@
             e.stopPropagation();
 
             if (e.key === 'Enter') {
+                e.preventDefault();
                 saveBtn.click();
                 return;
             }
@@ -3223,9 +5446,19 @@
 
     document.addEventListener('keydown', handleShortcutKey);
 
+    // ===== keyup 监听：用于检测长按结束 =====
+    document.addEventListener('keyup', (e) => {
+        const pressedKey = normalizeKey(e.key);
+        const savedKey = normalizeKey(blockShortcutKey);
+        if (pressedKey === savedKey) {
+            stopBatchBlock();
+        }
+    });
+
     // 注册油猴菜单命令
     if (typeof GM_registerMenuCommand === 'function') {
-        GM_registerMenuCommand('⚙️ 设置拉黑快捷键', openBlockSettings);
+        GM_registerMenuCommand('设置拉黑快捷键', openBlockSettings);
+        GM_registerMenuCommand('查看拉黑记录', openBlockLogPage);
         console.log('[抖音一键拉黑] 已注册油猴菜单命令');
     }
 
@@ -3367,9 +5600,19 @@
         }, 1000);
     }
 
-    console.log('[抖音一键拉黑] v4.5 修复版脚本加载完成');
+    console.log('[抖音一键拉黑] v5.5 关键词拉黑 + 拉黑日志版脚本加载完成');
     console.log('[抖音一键拉黑] 当前快捷键: ' + getShortcutDisplayName());
+    console.log('[抖音一键拉黑] 长按 >5秒 可批量拉黑评论区所有用户');
     console.log('[抖音一键拉黑] 右键点击拉黑按钮可打开设置面板');
     console.log('[抖音一键拉黑] 360浏览器兼容性优化已启用');
-})();
 
+
+console.log(
+  '%c作者: Lun.%c | %chttps://github.com/Lun-OS',
+  'color: #ff6b6b; font-size: 1.2em; font-weight: bold; text-shadow: 0 0 2px #ff6b6b;',
+  'color: #ccc; font-weight: normal;',
+  'color: #5f9ea0; text-decoration: underline; font-style: italic;'
+);
+
+
+})();
