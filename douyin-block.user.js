@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         抖音一键拉黑
 // @namespace    https://github.com/Lun-OS/Tampermonkey-Douyin_BlockPlus
-// @version      5.5
+// @version      5.6
 // @description  抖音拉黑从未如此丝滑——0.01秒接口直封，无需模拟点击，无需跳转菜单。全场景（推荐/详情/评论/直播间...）按钮自动就位，点一下瞬间屏蔽/解除，纯净体验零等待。长按快捷键批量拉黑评论区所有用户（并发数与触发时间可配置），作者评论可选择性最后拉黑。关键词自动拉黑 + 命中隐藏，拉黑记录可查看与清除。
 // @author       Lun.
 // @match        https://www.douyin.com/*
@@ -21,7 +21,7 @@
 (function() {
     'use strict';
 
-    console.log('[抖音拉黑] v5.5 (关键词拉黑 + 拉黑日志版)');
+    console.log('[抖音拉黑] v5.6 (弹幕接口拦截优化版)');
 
     // 清理旧版本的设置项
     localStorage.removeItem('douyin-block-comment-shortcut-enabled');
@@ -449,26 +449,450 @@
         .log-unblock-btn:disabled { opacity: 0.5; cursor: not-allowed !important; }
         /* 屏蔽词输入框聚焦样式 */
         #block-words-input:focus { outline: none; border-color: #5a5a5a; }
-        /* 弹幕拉黑按钮 */
+        /* 弹幕拉黑按钮 - 使用更高的特异性 */
+        /* 弹幕拉黑按钮 - 最高优先级 */
+        div.jnuqoLJD > div.Jv2QcCOl > div.douyin-danmu-block-btn,
+        div.jnuqoLJD > div.douyin-danmu-block-btn,
+        div.Jv2QcCOl > div.douyin-danmu-block-btn,
+        .jnuqoLJD .douyin-danmu-block-btn,
         .douyin-danmu-block-btn {
-            display: inline-flex;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            padding: 2px 4px !important;
+            border-radius: 4px !important;
+            background: rgba(0,0,0,0.6) !important;
+            transition: all 0.2s ease !important;
+            margin: 0 4px !important;
+            vertical-align: middle !important;
+            line-height: 1 !important;
+            pointer-events: auto !important;
+            position: relative !important;
+            z-index: 9999 !important;
+            border: 1px solid rgba(255,68,68,0.5) !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            min-width: 20px !important;
+            min-height: 20px !important;
+        }
+        /* 弹幕按钮悬停效果 */
+        div.jnuqoLJD > div.Jv2QcCOl > div.douyin-danmu-block-btn:hover,
+        div.jnuqoLJD > div.douyin-danmu-block-btn:hover,
+        div.Jv2QcCOl > div.douyin-danmu-block-btn:hover,
+        .jnuqoLJD .douyin-danmu-block-btn:hover,
+        .douyin-danmu-block-btn:hover {
+            background: rgba(255,68,68,0.9) !important;
+            transform: scale(1.2) !important;
+            border-color: #ff4444 !important;
+            opacity: 1 !important;
+        }
+        /* 弹幕按钮SVG */
+        div.jnuqoLJD > div.Jv2QcCOl > div.douyin-danmu-block-btn svg,
+        div.jnuqoLJD > div.douyin-danmu-block-btn svg,
+        div.Jv2QcCOl > div.douyin-danmu-block-btn svg,
+        .jnuqoLJD .douyin-danmu-block-btn svg,
+        .douyin-danmu-block-btn svg {
+            display: block !important;
+            pointer-events: none !important;
+        }
+        /* 已拉黑状态的弹幕按钮 */
+        div.jnuqoLJD > div.Jv2QcCOl > div.douyin-danmu-block-btn[data-blocked="true"],
+        div.jnuqoLJD > div.douyin-danmu-block-btn[data-blocked="true"],
+        div.Jv2QcCOl > div.douyin-danmu-block-btn[data-blocked="true"],
+        .jnuqoLJD .douyin-danmu-block-btn[data-blocked="true"] {
+            opacity: 0.5 !important;
+        }
+        /* 免责协议弹窗样式 */
+        .douyin-disclaimer-overlay {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(0, 0, 0, 0.85) !important;
+            z-index: 2147483647 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        }
+        .douyin-disclaimer-panel {
+            background: #1a1a1a !important;
+            border-radius: 16px !important;
+            padding: 28px !important;
+            max-width: 480px !important;
+            width: 90% !important;
+            color: #fff !important;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+            border: 1px solid #333 !important;
+            max-height: 85vh !important;
+            overflow-y: auto !important;
+        }
+        .douyin-disclaimer-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #fe2c55;
+        }
+        .douyin-disclaimer-content {
+            font-size: 14px;
+            line-height: 1.8;
+            color: #ddd;
+            margin-bottom: 24px;
+        }
+        .douyin-disclaimer-content p {
+            margin-bottom: 12px;
+        }
+        .douyin-disclaimer-content .highlight {
+            color: #fe2c55;
+            font-weight: 600;
+        }
+        .douyin-disclaimer-content .safe {
+            color: #4ade80;
+            font-weight: 600;
+        }
+        .douyin-disclaimer-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        .douyin-disclaimer-btn {
+            flex: 1;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .douyin-disclaimer-btn-agree {
+            background: #fe2c55;
+            color: #fff;
+        }
+        .douyin-disclaimer-btn-agree:hover {
+            background: #e6254b;
+        }
+        .douyin-disclaimer-btn-disagree {
+            background: #2a2a2a;
+            color: #888;
+            border: 1px solid #444;
+        }
+        .douyin-disclaimer-btn-disagree:hover {
+            background: #333;
+            color: #fff;
+        }
+        .douyin-disclaimer-warning {
+            background: rgba(254, 44, 85, 0.1);
+            border-left: 3px solid #fe2c55;
+            padding: 12px 16px;
+            margin: 16px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 13px;
+            color: #ff6b7a;
+        }
+        .douyin-disclaimer-panel {
+            background: #1a1a1a !important;
+            border-radius: 16px !important;
+            max-width: 520px !important;
+            width: 90% !important;
+            color: #fff !important;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+            border: 1px solid #333 !important;
+            max-height: 90vh !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
+        .douyin-disclaimer-header {
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid #333;
+            flex-shrink: 0;
+        }
+        .douyin-disclaimer-scroll-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px 24px;
+            max-height: 50vh;
+        }
+        .douyin-disclaimer-scroll-area::-webkit-scrollbar {
+            width: 6px;
+        }
+        .douyin-disclaimer-scroll-area::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+        .douyin-disclaimer-scroll-area::-webkit-scrollbar-thumb {
+            background: #444;
+            border-radius: 3px;
+        }
+        .douyin-disclaimer-scroll-area::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .douyin-disclaimer-footer {
+            padding: 16px 24px 20px;
+            border-top: 1px solid #333;
+            background: #1a1a1a;
+            flex-shrink: 0;
+        }
+        .douyin-disclaimer-footer-text {
+            font-size: 11px;
+            color: #888;
+            text-align: center;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        /* 设置面板标签页样式 */
+        .douyin-block-settings-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 12px;
+        }
+        .douyin-block-settings-tab {
+            padding: 8px 16px;
+            background: transparent;
+            border: none;
+            color: #888;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .douyin-block-settings-tab:hover {
+            color: #fff;
+            background: #2a2a2a;
+        }
+        .douyin-block-settings-tab.active {
+            color: #fe2c55;
+            background: rgba(254, 44, 85, 0.1);
+            font-weight: 600;
+        }
+        .douyin-block-settings-tab-content {
+            display: none;
+        }
+        .douyin-block-settings-tab-content.active {
+            display: block;
+        }
+        /* 关于页面样式 */
+        .douyin-about-section {
+            margin-bottom: 20px;
+        }
+        .douyin-about-section-title {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .douyin-about-author-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: #252525;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        .douyin-about-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 2px solid #fe2c55;
+            object-fit: cover;
+        }
+        .douyin-about-author-info {
+            flex: 1;
+        }
+        .douyin-about-author-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        .douyin-about-author-role {
+            font-size: 13px;
+            color: #fe2c55;
+        }
+        .douyin-about-info-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #333;
+        }
+        .douyin-about-info-item:last-child {
+            border-bottom: none;
+        }
+        .douyin-about-info-icon {
+            width: 36px;
+            height: 36px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
-            padding: 0 2px;
-            border-radius: 3px;
-            background: rgba(0,0,0,0.4);
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .douyin-about-info-content {
+            flex: 1;
+        }
+        .douyin-about-info-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 2px;
+        }
+        .douyin-about-info-value {
+            font-size: 14px;
+            color: #fff;
+            word-break: break-all;
+        }
+        .douyin-about-info-value a {
+            color: #fe2c55;
+            text-decoration: none;
+        }
+        .douyin-about-info-value a:hover {
+            text-decoration: underline;
+        }
+        .douyin-about-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .douyin-about-link-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 13px;
+            text-decoration: none;
             transition: all 0.2s;
-            margin-left: 4px;
-            vertical-align: middle;
-            line-height: 1;
         }
-        .douyin-danmu-block-btn:hover {
-            background: rgba(0,0,0,0.7);
-            transform: scale(1.15);
+        .douyin-about-link-btn:hover {
+            background: #333;
+            border-color: #fe2c55;
+            color: #fe2c55;
         }
-        .douyin-danmu-block-btn svg { display: block; }
+        .douyin-about-version-badge {
+            display: inline-block;
+            background: rgba(254, 44, 85, 0.15);
+            color: #fe2c55;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
     `);
+
+    // ==================== 拦截弹幕接口 ====================
+    // 存储弹幕用户信息，用于后续按钮创建
+    const danmakuUserMap = new Map();
+
+    // 拦截 XMLHttpRequest
+    const originalXhrOpen = XMLHttpRequest.prototype.open;
+    const originalXhrSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function(method, url, ...args) {
+        this._url = url;
+        return originalXhrOpen.call(this, method, url, ...args);
+    };
+
+    XMLHttpRequest.prototype.send = function(...args) {
+        const url = this._url || '';
+
+        // 拦截弹幕接口
+        if (url.includes('/aweme/v1/web/danmaku/') || url.includes('danmaku/get')) {
+            console.log('[抖音一键拉黑] 拦截到弹幕请求:', url);
+
+            const originalOnReadyStateChange = this.onreadystatechange;
+            this.onreadystatechange = function() {
+                if (this.readyState === 4 && this.status === 200) {
+                    try {
+                        const response = JSON.parse(this.responseText);
+                        if (response.danmaku_list || response.data) {
+                            const danmakuList = response.danmaku_list || response.data || [];
+                            console.log('[抖音一键拉黑] 获取到弹幕数据:', danmakuList.length, '条');
+
+                            // 存储弹幕用户信息
+                            danmakuList.forEach(item => {
+                                if (item.user_id) {
+                                    danmakuUserMap.set(item.danmaku_id || item.id, {
+                                        userId: item.user_id,
+                                        secUid: item.sec_uid || item.user_sec_id,
+                                        nickname: item.user_nickname || item.nickname,
+                                        text: item.content || item.text
+                                    });
+                                }
+                            });
+
+                            // 延迟处理弹幕DOM
+                            setTimeout(() => {
+                                processAllDanmu();
+                            }, 100);
+                        }
+                    } catch (e) {
+                        console.warn('[抖音一键拉黑] 解析弹幕响应失败:', e);
+                    }
+                }
+                if (originalOnReadyStateChange) {
+                    originalOnReadyStateChange.call(this);
+                }
+            };
+        }
+
+        return originalXhrSend.call(this, ...args);
+    };
+
+    // 拦截 fetch API
+    const originalFetch = window.fetch;
+    window.fetch = async function(url, ...args) {
+        const urlStr = url.toString ? url.toString() : url;
+
+        const response = await originalFetch.call(this, url, ...args);
+
+        // 拦截弹幕接口
+        if (urlStr.includes('/aweme/v1/web/danmaku/') || urlStr.includes('danmaku/get')) {
+            console.log('[抖音一键拉黑] 拦截到 fetch 弹幕请求:', urlStr);
+
+            // 克隆响应以便读取
+            const clonedResponse = response.clone();
+            clonedResponse.json().then(data => {
+                if (data.danmaku_list || data.data) {
+                    const danmakuList = data.danmaku_list || data.data || [];
+                    console.log('[抖音一键拉黑] fetch 获取到弹幕数据:', danmakuList.length, '条');
+
+                    // 存储弹幕用户信息
+                    danmakuList.forEach(item => {
+                        if (item.user_id) {
+                            danmakuUserMap.set(item.danmaku_id || item.id, {
+                                userId: item.user_id,
+                                secUid: item.sec_uid || item.user_sec_id,
+                                nickname: item.user_nickname || item.nickname,
+                                text: item.content || item.text
+                            });
+                        }
+                    });
+
+                    // 延迟处理弹幕DOM
+                    setTimeout(() => {
+                        processAllDanmu();
+                    }, 100);
+                }
+            }).catch(e => {
+                console.warn('[抖音一键拉黑] 解析 fetch 弹幕响应失败:', e);
+            });
+        }
+
+        return response;
+    };
 
     // 显示提示
     function showToast(message) {
@@ -477,6 +901,114 @@
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 2000);
+    }
+
+    // ==================== 免责协议 ====================
+    const DISCLAIMER_KEY = 'douyin-block-disclaimer-agreed';
+    let userAgreedDisclaimer = false;
+
+    // 检查用户是否已同意免责协议
+    function checkDisclaimerAgreed() {
+        try {
+            return localStorage.getItem(DISCLAIMER_KEY) === 'true';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // 显示免责协议弹窗
+    function showDisclaimerDialog() {
+        // 如果已经同意，直接返回
+        if (checkDisclaimerAgreed()) {
+            userAgreedDisclaimer = true;
+            return true;
+        }
+
+        // 如果弹窗已存在，不再重复创建
+        if (document.querySelector('.douyin-disclaimer-overlay')) {
+            return false;
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = 'douyin-disclaimer-overlay';
+        overlay.innerHTML = `
+            <div class="douyin-disclaimer-panel">
+                <div class="douyin-disclaimer-header">
+                    <div class="douyin-disclaimer-title">使用免责声明及用户协议</div>
+                </div>
+                <div class="douyin-disclaimer-scroll-area">
+                    <div class="douyin-disclaimer-content">
+                        <p>欢迎使用「抖音一键拉黑」插件！本插件是一款开源的浏览器扩展工具，旨在帮助用户更高效地管理抖音社交体验。在使用前，请您仔细阅读并充分理解以下条款：</p>
+
+                        <p><span class="highlight">一、功能说明与使用限制</span><br>
+                        1.1 本插件通过调用抖音开放平台公开接口实现用户拉黑/解除拉黑功能，所有操作均需要您已登录抖音账号并拥有相应权限。<br>
+                        1.2 插件提供的批量拉黑、关键词自动拉黑等功能仅供个人合理使用，不得用于任何违法违规目的。<br>
+                        1.3 您理解并同意，抖音平台可能随时调整其接口策略，这可能导致插件部分或全部功能暂时或永久失效。</p>
+
+                        <p><span class="highlight">二、风险提示与责任承担</span><br>
+                        2.1 <strong>账号风控风险：</strong>高频操作（包括但不限于批量拉黑、快速切换操作）可能导致您的抖音账号触发平台风控机制，后果包括但不限于：操作频率限制、功能暂时封禁、账号短期或长期限制使用等。<br>
+                        2.2 <strong>数据安全风险：</strong>尽管本插件已采取安全措施，但其他非本插件的脚本任无法阻止获取，请不要加载其他恶意插件<br>
+                        2.3 <strong>责任承担：</strong>使用本插件进行的所有操作均由您自行承担全部风险和责任。因使用本插件导致的任何账号问题、数据丢失、功能受限、经济损失或其他直接或间接损失，插件作者及相关贡献者不承担任何法律责任。</p>
+
+                        <p><span class="highlight">三、隐私保护与数据安全</span><br>
+                        3.1 <span class="safe">本插件完全在您的浏览器本地运行，不会收集、存储或传输您的任何个人信息</span>，包括但不限于：账号密码、Cookie、Token、浏览记录、操作日志、个人资料等。<br>
+                        3.2 插件代码完全开源透明，您可以通过下方提供的仓库地址查看完整源代码，自行验证数据安全性。<br>
+                        3.3 插件产生的所有数据（如设置项、屏蔽词列表、拉黑记录）均保存在您的浏览器本地存储中，作者无法访问。</p>
+
+                        <p><span class="highlight">四、知识产权与开源协议</span><br>
+                        4.1 本插件基于 MIT 协议开源，您可以自由使用、修改、分发，但必须遵守 MIT 协议的相关条款。<br>
+                        4.2 插件版权归作者 Lun. 所有，保留一切权利。<br>
+                        4.3 本插件与抖音官方无关，不代表抖音官方立场。</p>
+
+                        <p><span class="highlight">五、使用建议与最佳实践</span><br>
+                        5.1 建议合理控制操作频率，批量拉黑时建议将并发数量设置在 5-10 之间。<br>
+                        5.2 建议开启"批量拉黑后拉黑视频作者"功能前三思，避免误操作。<br>
+                        5.3 定期检查插件更新，以获取功能改进和问题修复。<br>
+                        5.4 如遇账号异常，请联系抖音官方客服。</p>
+
+                        <div class="douyin-disclaimer-warning">
+                            <strong>重要提示：</strong>本插件仅供学习交流和技术研究使用。请遵守抖音平台用户协议及相关法律法规，理性使用，文明上网。因违规使用本插件造成的一切后果由使用者自行承担。
+                        </div>
+                    </div>
+                </div>
+                <div class="douyin-disclaimer-footer">
+                    <div class="douyin-disclaimer-footer-text">
+                        点击"同意并继续使用"即表示您已充分阅读、完全理解并自愿接受上述所有条款。如您不同意本协议的任何条款，请点击"不同意"关闭弹窗，插件功能将不会启用。如您未满 18 周岁，请在监护人指导下使用本插件。
+                    </div>
+                    <div class="douyin-disclaimer-buttons">
+                        <button class="douyin-disclaimer-btn douyin-disclaimer-btn-disagree" id="disclaimer-disagree">不同意</button>
+                        <button class="douyin-disclaimer-btn douyin-disclaimer-btn-agree" id="disclaimer-agree">同意并继续使用</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // 绑定按钮事件
+        const agreeBtn = overlay.querySelector('#disclaimer-agree');
+        const disagreeBtn = overlay.querySelector('#disclaimer-disagree');
+
+        agreeBtn.addEventListener('click', () => {
+            try {
+                localStorage.setItem(DISCLAIMER_KEY, 'true');
+            } catch (e) {}
+            userAgreedDisclaimer = true;
+            overlay.remove();
+            // 同意后立即初始化
+            init();
+            observeNewVideos();
+            showToast('感谢您的信任，插件已启用');
+        });
+
+        disagreeBtn.addEventListener('click', () => {
+            overlay.remove();
+            userAgreedDisclaimer = false;
+            showToast('您已拒绝免责声明，插件功能未启用');
+            // 下次加载页面时还会询问
+        });
+
+        return false;
     }
 
     // 从按钮所在容器获取视频作者信息 - 增强版（360浏览器兼容性优化）
@@ -1886,10 +2418,14 @@
     }
 
     // 创建拉黑按钮
-    function createBlockButton(container) {
+    // authorSecUid 可选：传入时写入 btn.dataset.secUid，便于 getCurrentVideoAuthorSecUid 兜底反推
+    function createBlockButton(container, authorSecUid) {
         const btn = document.createElement('div');
         btn.className = 'douyin-block-btn';
         btn.dataset.blocked = 'false';
+        if (authorSecUid && typeof authorSecUid === 'string') {
+            btn.dataset.secUid = authorSecUid;
+        }
         btn.innerHTML = `
             <div class="block-icon">
                 <svg class="icon" style="width: 1.5em;height: 1.5em;vertical-align: middle;fill: currentColor;overflow: hidden;" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4148"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" fill="#ffffff" p-id="4149"></path></svg>
@@ -2000,7 +2536,7 @@
                         recordBlockedUser(enrichAuthorInfo({
                             secUid: secUid,
                             nickname: '' // 推荐页卡片通常没有显式昵称
-                        }), 'feed-card');
+                        }), '拉黑视频作者');
                     } catch (e) {}
                     console.log('[抖音一键拉黑] 按钮状态已更新为: 已拉黑');
                 } else if (result.isBlocked === false) {
@@ -2037,6 +2573,9 @@
     // 3. 插入目标：在头像容器之前（即视觉上头像的上方），且与可能存在的 AI 按钮处于同一父容器
     // 4. 兼容 AI 按钮存在/不存在的两种情况
     function insertButtonForInteractionArea(interactionArea) {
+        // 检查推荐视频功能是否开启
+        if (!enableRecommendBlock) return false;
+
         // 检查是否已处理过此互动区域
         if (interactionArea.hasAttribute('data-block-btn-processed')) {
             return false;
@@ -2180,8 +2719,18 @@
             return false;
         }
 
-        // 步骤5：创建新按钮元素
-        const blockBtn = createBlockButton(interactionArea);
+        // 步骤5：创建新按钮元素（同步把作者 secUid 存到 dataset.secUid，
+        // 便于 getCurrentVideoAuthorSecUid 兜底反推作者身份）
+        let authorSecUidForBtn = null;
+        try {
+            if (isLiveCard) {
+                // 直播卡片不在此保存（点击时异步获取）
+            } else {
+                const m = href.match(/MS4wLj[A-Za-z0-9_\-]+/);
+                if (m) authorSecUidForBtn = m[0];
+            }
+        } catch (e) {}
+        const blockBtn = createBlockButton(interactionArea, authorSecUidForBtn);
         if (isLiveCard && liveRoomId) {
             blockBtn.setAttribute('data-live-room-id', liveRoomId);
             interactionArea.setAttribute('data-live-room-id', liveRoomId);
@@ -2209,6 +2758,9 @@
 
     // 为评论区单个评论插入拉黑按钮 - 增强版
     function insertButtonForComment(commentItem) {
+        // 检查评论区功能是否开启
+        if (!enableCommentBlock) return false;
+
         // 检查是否已存在按钮
         if (commentItem.querySelector('.douyin-comment-block-btn')) {
             console.log('[抖音一键拉黑] 评论已存在拉黑按钮，跳过');
@@ -3104,7 +3656,11 @@
 
         // 视觉：隐藏或加虚框
         if (hideCommentsOnBlockWord) {
+            // 多重隐藏样式确保弹幕被完全隐藏
             danmuEl.style.setProperty('display', 'none', 'important');
+            danmuEl.style.setProperty('visibility', 'hidden', 'important');
+            danmuEl.style.setProperty('opacity', '0', 'important');
+            danmuEl.style.setProperty('pointer-events', 'none', 'important');
         } else {
             danmuEl.style.setProperty('outline', '1px dashed #555', 'important');
         }
@@ -3120,15 +3676,18 @@
 
             const result = await blockUser(sec, false, true);
             if (result && result.success) {
+                // 修复：使用正确的昵称和类型
+                const nickname = info.nickname || info.userId || ('uid_' + info.userId);
                 recordBlockedUser(enrichAuthorInfo({
                     secUid: sec,
-                    nickname: info.nickname || ('uid_' + info.userId)
-                }), 'danmu-keyword:' + matched);
+                    nickname: nickname
+                }), '弹幕');
                 // 同步弹幕按钮的"已拉黑"态
                 const btn = danmuEl.querySelector('.douyin-danmu-block-btn');
                 if (btn) {
+                    console.log('[抖音一键拉黑] 关键词拉黑后同步按钮状态:', btn.dataset.danmuId, '设置 blocked=true');
                     btn.title = '已拉黑';
-                    btn.style.opacity = '0.5';
+                    btn.dataset.blocked = 'true';
                 }
             }
         } catch (e) {}
@@ -3140,6 +3699,54 @@
         if (!blockWords || blockWords.length === 0) return;
         const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
         items.forEach(handleDanmuBlockWord);
+    }
+
+    // 处理弹幕关键词命中（不隐藏弹幕版本）
+    async function handleDanmuBlockWordNoHide(danmuEl) {
+        if (!danmuEl || danmuEl.dataset.dyBlockWordHandled === '1') return;
+        if (!blockWordEnabled) return;
+        if (!blockWords || blockWords.length === 0) return;
+        if (!isValidDanmuElement(danmuEl)) return;
+
+        const info = getDanmuAuthorInfo(danmuEl);
+        const text = info.text;
+        if (!text) return;
+
+        const matched = commentTextMatchesBlockWord(text, blockWords);
+        if (!matched) return;
+
+        // 标记为已处理
+        danmuEl.dataset.dyBlockWordHandled = '1';
+        danmuEl.dataset.dyBlockWord = matched;
+        danmuEl.dataset.dyBlockWordApplied = '1';
+
+        // 只加虚框，不隐藏
+        danmuEl.style.setProperty('outline', '1px dashed #555', 'important');
+
+        // 异步拉黑（弹幕是数字 userId，先转 sec_uid）
+        if (!info.userId) return;
+        try {
+            const sec = await resolveDanmuUserToSecUid(info.userId);
+            if (!sec) return;
+            const processedKey = 'danmu-kw:' + sec;
+            if (batchBlockState.processedUids.has(processedKey)) return;
+            batchBlockState.processedUids.add(processedKey);
+
+            const result = await blockUser(sec, false, true);
+            if (result && result.success) {
+                recordBlockedUser(enrichAuthorInfo({
+                    secUid: sec,
+                    nickname: info.nickname || ('uid_' + info.userId)
+                }), '弹幕:' + matched);
+                // 同步弹幕按钮的"已拉黑"态
+                const btn = danmuEl.querySelector('.douyin-danmu-block-btn');
+                if (btn) {
+                    console.log('[抖音一键拉黑] 关键词拉黑后同步按钮状态:', btn.dataset.danmuId, '设置 blocked=true');
+                    btn.title = '已拉黑';
+                    btn.dataset.blocked = 'true';
+                }
+            }
+        } catch (e) {}
     }
 
     // 验证元素是否是有效的评论元素（包含用户信息）
@@ -3186,6 +3793,20 @@
         const textEl = danmuEl.querySelector('.danMuText, .CX7YtMrf');
         const text = textEl ? (textEl.textContent || '').trim() : '';
         const isAuthor = danmuEl.getAttribute('data-is-danmu-author') === 'true';
+
+        // 优先使用拦截到的弹幕数据
+        if (danmuId && danmakuUserMap.has(danmuId)) {
+            const cachedInfo = danmakuUserMap.get(danmuId);
+            return {
+                userId: cachedInfo.userId || userId,
+                danmuId: danmuId,
+                secUid: cachedInfo.secUid,
+                nickname: cachedInfo.nickname || text.slice(0, 30),
+                text: cachedInfo.text || text,
+                isAuthor: isAuthor
+            };
+        }
+
         return {
             userId: userId,
             danmuId: danmuId,
@@ -3202,18 +3823,61 @@
         btn.title = '拉黑该弹幕用户';
         btn.dataset.danmuUserId = danmuInfo.userId || '';
         btn.dataset.danmuId = danmuInfo.danmuId || '';
-        btn.innerHTML = '<svg viewBox="0 0 1024 1024" width="14" height="14" style="fill:#ff4444;vertical-align:middle;"><path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z" p-id="4149"></path></svg>';
+        btn.dataset.blocked = 'false'; // 初始状态为未拉黑
+
+        console.log('[抖音一键拉黑] 创建弹幕按钮:', danmuInfo.danmuId, 'blocked=', btn.dataset.blocked);
+        console.log('[抖音一键拉黑] 按钮初始状态检查 - dataset.blocked:', btn.dataset.blocked, '类型:', typeof btn.dataset.blocked);
+
+        // 使用更醒目的图标和样式 - 初始状态为白色，悬停时变红
+        btn.innerHTML = `
+            <svg viewBox="0 0 1024 1024" width="14" height="14" style="fill:#ffffff;vertical-align:middle;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));transition:fill 0.2s ease;">
+                <path d="M671.9488 303.3088c0-112.9472-91.904-204.8512-204.8512-204.8512S262.2464 190.3104 262.2464 303.3088c0 72.6528 38.0928 136.6016 95.2832 172.9536-123.0336 44.8512-211.1488 163.072-211.1488 301.4144 0 14.1312 11.4688 25.6 25.6 25.6s25.6-11.4688 25.6-25.6c0-148.6336 120.9344-269.5168 269.5168-269.5168 112.9472 0 204.8512-91.904 204.8512-204.8512zM467.0976 456.96c-84.736 0-153.6512-68.9152-153.6512-153.6512s68.9152-153.6512 153.6512-153.6512 153.6512 68.9152 153.6512 153.6512-68.9152 153.6512-153.6512 153.6512zM706.5088 489.6768c-101.12 0-183.4496 82.2784-183.4496 183.4496 0 101.12 82.2784 183.4496 183.4496 183.4496 101.1712 0 183.4496-82.2784 183.4496-183.4496-0.0512-101.12-82.3296-183.4496-183.4496-183.4496z m-132.2496 183.4496c0-72.9088 59.3408-132.2496 132.2496-132.2496 27.904 0 53.8112 8.704 75.1616 23.552l-188.1088 177.3568c-12.2368-20.0192-19.3024-43.52-19.3024-68.6592z m132.2496 132.2496c-29.3376 0-56.4224-9.6256-78.3872-25.8048l189.2352-178.432a131.4304 131.4304 0 0 1 21.4016 71.9872c-0.0512 72.9088-59.3408 132.2496-132.2496 132.2496z"/>
+            </svg>
+        `;
+
+        // 确保按钮样式正确应用 - 初始状态为未拉黑（不透明）
+        btn.style.cssText = `
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            padding: 2px 4px !important;
+            border-radius: 4px !important;
+            background: rgba(0,0,0,0.6) !important;
+            transition: all 0.2s ease !important;
+            margin: 0 4px !important;
+            vertical-align: middle !important;
+            line-height: 1 !important;
+            pointer-events: auto !important;
+            position: relative !important;
+            z-index: 9999 !important;
+            border: 1px solid rgba(255,68,68,0.5) !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            min-width: 20px !important;
+            min-height: 20px !important;
+        `;
+
         btn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
             const userId = btn.dataset.danmuUserId;
+            const danmuId = btn.dataset.danmuId;
             if (!userId) {
                 showToast('弹幕用户 ID 缺失');
                 return;
             }
             btn.style.pointerEvents = 'none';
             try {
-                const secUid = await resolveDanmuUserToSecUid(userId);
+                // 优先使用拦截到的 secUid
+                let secUid = danmuInfo.secUid;
+                if (!secUid && danmuId && danmakuUserMap.has(danmuId)) {
+                    secUid = danmakuUserMap.get(danmuId).secUid;
+                }
+                // 如果没有拦截到，再调用接口获取
+                if (!secUid) {
+                    secUid = await resolveDanmuUserToSecUid(userId);
+                }
                 if (!secUid) {
                     showToast('无法获取该用户 sec_uid（可能接口受限）');
                     btn.style.pointerEvents = 'auto';
@@ -3222,8 +3886,10 @@
                 const result = await blockUser(secUid, false, true);
                 if (result && result.success) {
                     btn.title = '已拉黑';
-                    btn.style.opacity = '0.5';
-                    recordBlockedUser(enrichAuthorInfo({ secUid: secUid, nickname: danmuInfo.nickname || ('uid_' + userId) }), 'danmu');
+                    btn.dataset.blocked = 'true';
+                    // 修复：使用正确的昵称和类型
+                    const nickname = danmuInfo.nickname || danmuInfo.userId || ('uid_' + userId);
+                    recordBlockedUser(enrichAuthorInfo({ secUid: secUid, nickname: nickname }), '弹幕');
                     showToast('已拉黑该弹幕用户');
                 } else {
                     showToast('拉黑失败');
@@ -3312,47 +3978,167 @@
         });
     }
 
-    // 把拉黑按钮插入到弹幕元素附近
+    // 把拉黑按钮插入到弹幕元素外部（fixed定位，避免触发弹幕删除）
     function insertButtonToDanmu(danmuEl, btn) {
-        if (!danmuEl || danmuEl.querySelector('.douyin-danmu-block-btn')) return false;
-        // 优先插到 .danMuText 后
-        const textEl = danmuEl.querySelector('.danMuText, .CX7YtMrf');
-        if (textEl && textEl.parentElement) {
-            try {
-                const wrap = document.createElement('span');
-                wrap.style.cssText = 'display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle;';
-                wrap.appendChild(btn);
-                textEl.insertAdjacentElement('afterend', wrap);
-                return true;
-            } catch (e) {}
+        if (!danmuEl) return false;
+
+        // 检查是否已有按钮
+        const danmuId = btn.dataset.danmuId;
+        const existingBtn = document.querySelector('.douyin-danmu-block-btn-external[data-danmu-id="' + danmuId + '"]');
+        if (existingBtn) return false;
+
+        // 获取弹幕元素的位置
+        const rect = danmuEl.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return false;
+
+        // 将按钮标记为外部按钮
+        btn.classList.add('douyin-danmu-block-btn-external');
+        // 只显示图标，不显示按钮轮廓
+        btn.style.cssText = `
+            position: fixed !important;
+            left: ${rect.right + 2}px !important;
+            top: ${rect.top + (rect.height - 16) / 2}px !important;
+            width: 16px !important;
+            height: 16px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            z-index: 99999 !important;
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        `;
+
+        // 修改图标样式 - 根据状态设置颜色
+        const isBlocked = btn.dataset.blocked === 'true';
+        const svg = btn.querySelector('svg');
+        if (svg) {
+            svg.style.cssText = `
+                width: 16px !important;
+                height: 16px !important;
+                fill: ${isBlocked ? '#888888' : '#ff4444'} !important;
+                filter: drop-shadow(0 1px 2px rgba(0,0,0,0.8)) !important;
+            `;
         }
-        // 兜底：插到 danmuEl 末尾
-        try {
-            danmuEl.appendChild(btn);
-            return true;
-        } catch (e) {}
-        return false;
+
+        // 将按钮插入到 body 中
+        document.body.appendChild(btn);
+        console.log('[抖音一键拉黑] 按钮插入到外部（fixed定位，仅图标）:', danmuId);
+
+        // 监听弹幕元素位置变化，更新按钮位置
+        const updatePosition = () => {
+            const newRect = danmuEl.getBoundingClientRect();
+            if (newRect.width === 0 || newRect.height === 0) {
+                btn.remove();
+                return;
+            }
+            btn.style.left = (newRect.right + 2) + 'px';
+            btn.style.top = (newRect.top + (newRect.height - 16) / 2) + 'px';
+        };
+
+        // 使用 requestAnimationFrame 定期更新位置
+        let rafId;
+        const animate = () => {
+            updatePosition();
+            rafId = requestAnimationFrame(animate);
+        };
+        animate();
+
+        // 清理函数
+        btn._cleanup = () => {
+            if (rafId) cancelAnimationFrame(rafId);
+        };
+
+        return true;
+    }
+
+    // 为弹幕按钮添加事件阻止冒泡（防止鼠标悬停时弹幕消失）
+    function addDanmuBtnEventBlockers(btn) {
+        const events = ['mouseenter', 'mouseleave', 'mouseover', 'mouseout', 'mousemove', 'mousedown', 'mouseup', 'click'];
+        events.forEach(eventName => {
+            btn.addEventListener(eventName, (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+            }, true);
+        });
     }
 
     // 处理页面所有可见弹幕
     function processAllDanmu() {
-        if (!blockWordEnabled && !logBlockedEnabled) return; // 没启用任何依赖则不渲染
+        // 检查弹幕功能是否开启
+        if (!enableDanmuBlock) return;
+
         const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
+        let processedCount = 0;
+        let skippedCount = 0;
+
         items.forEach((el) => {
             if (!isValidDanmuElement(el)) return;
-            if (el.querySelector('.douyin-danmu-block-btn')) return;
+
+            // 检查是否已有按钮（使用更精确的选择器）
+            const existingBtn = el.querySelector(':scope > .douyin-danmu-block-btn, :scope > * > .douyin-danmu-block-btn, :scope > .Jv2QcCOl > .douyin-danmu-block-btn, :scope > .mSHxEcv0 > .douyin-danmu-block-btn');
+            if (existingBtn) {
+                skippedCount++;
+                return;
+            }
+
+            // 先检查屏蔽词，如果命中且需要隐藏，则直接隐藏并不插入按钮
+            if (blockWordEnabled && blockWords && blockWords.length > 0 && hideCommentsOnBlockWord) {
+                const info = getDanmuAuthorInfo(el);
+                if (info.text && !el.dataset.dyBlockWordHandled) {
+                    const matched = commentTextMatchesBlockWord(info.text, blockWords);
+                    if (matched) {
+                        // 标记为已处理
+                        el.dataset.dyBlockWordHandled = '1';
+                        el.dataset.dyBlockWord = matched;
+                        el.dataset.dyBlockWordApplied = '1';
+                        // 直接隐藏弹幕元素
+                        el.style.setProperty('display', 'none', 'important');
+                        el.style.setProperty('visibility', 'hidden', 'important');
+                        el.style.setProperty('opacity', '0', 'important');
+                        // 异步拉黑该用户
+                        handleDanmuBlockWord(el);
+                        processedCount++;
+                        return; // 隐藏后不插入按钮
+                    }
+                }
+            }
+
             const info = getDanmuAuthorInfo(el);
+            if (!info.userId) {
+                console.warn('[抖音一键拉黑] 弹幕元素缺少 userId:', el);
+                return;
+            }
+
             const btn = createDanmuBlockButton(el, info);
-            insertButtonToDanmu(el, btn);
+            const inserted = insertButtonToDanmu(el, btn);
+            if (inserted) {
+                processedCount++;
+            }
         });
-        // 按钮插完后再走关键词检测（独立函数，含去重 + 日志）
-        if (blockWordEnabled) {
-            processAllDanmuForBlockWord();
+
+        if (processedCount > 0 || skippedCount > 0) {
+            console.log(`[抖音一键拉黑] 处理弹幕: ${processedCount} 个已处理, ${skippedCount} 个已跳过, 总计 ${items.length} 个`);
+        }
+
+        // 按钮插完后再走关键词检测（处理不需要隐藏的情况）
+        // 注意：手动拉黑后不需要隐藏弹幕，所以使用 handleDanmuBlockWordNoHide
+        if (blockWordEnabled && !hideCommentsOnBlockWord) {
+            const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
+            items.forEach(handleDanmuBlockWordNoHide);
         }
     }
 
     // 为视频详情页面插入拉黑按钮
     function insertButtonForVideoDetailPage() {
+        // 检查视频详情功能是否开启
+        if (!enableVideoDetailBlock) return 0;
+
         if (!isVideoDetailPage()) {
             return 0;
         }
@@ -3682,6 +4468,9 @@
     }
 
     function insertButtonForRecommendLiveStream() {
+        // 检查直播间功能是否开启
+        if (!enableLiveBlock) return 0;
+
         // 只在首页推荐页执行
         if (isVideoDetailPage() || isLiveStreamPage()) {
             return 0;
@@ -3883,7 +4672,14 @@
 
     // 主初始化函数 - 增强版
     function init() {
-        console.log('[抖音拉黑] 初始化 v5.5 (关键词拉黑 + 拉黑日志版)');
+        console.log('[抖音拉黑] 初始化 v5.6 (关键词拉黑 + 拉黑日志版)');
+
+        // 检查用户是否同意免责协议
+        if (!userAgreedDisclaimer && !checkDisclaimerAgreed()) {
+            console.log('[抖音一键拉黑] 用户未同意免责声明，暂停初始化');
+            return;
+        }
+        userAgreedDisclaimer = true;
 
         // 启动WebSocket拦截器（必须最早执行）
         setupWebSocketInterceptor();
@@ -3910,6 +4706,11 @@
 
         // 启动弹幕按钮扫描
         processAllDanmu();
+
+        // 定时扫描弹幕（弹幕是动态滚动的，需要频繁检查）
+        setInterval(() => {
+            processAllDanmu();
+        }, 500);
 
         // 页面可见性变化时的处理
         document.addEventListener('visibilitychange', () => {
@@ -4050,7 +4851,7 @@
                     processAllDanmu();
 
                     // ===== 批量模式：新评论出现时立即触发扫描 =====
-                    if (batchBlockState.active && Date.now() - batchBlockState.startTime >= 5000) {
+                    if (batchBlockState.active && Date.now() - batchBlockState.startTime >= 3000) {
                         setTimeout(processBatchBlockQueue, 0);
                     }
                 }, 100);
@@ -4088,7 +4889,7 @@
         stats: { success: 0, failed: 0, authorPending: 0 }
     };
 
-    // 提取当前视频作者 sec_uid（按优先级：全局变量 → 视频详情按钮 → 视频卡片按钮）
+    // 提取当前视频作者 sec_uid（按优先级：全局变量 → 视频详情按钮 → 视频卡片按钮 → 推荐流卡片 → 互动面板拉黑按钮反推）
     function getCurrentVideoAuthorSecUid() {
         const win = unsafeWindow || window;
         const candidates = [
@@ -4120,6 +4921,41 @@
                     if (sec && sec.startsWith('MS4wLj')) return sec;
                 }
                 return null;
+            },
+            () => {
+                // 兜底 3（推荐流 feed 卡片）：从可见的 [data-e2e="feed-item"] 容器中
+                // 提取作者主页链接 href 里的 MS4wLj... 段。
+                // 抖音推荐流中作者头像/昵称是 <a href="//www.douyin.com/user/MS4wLj...">，class 名常变。
+                const items = document.querySelectorAll('[data-e2e="feed-item"]');
+                for (const item of items) {
+                    // 优先匹配当前视口中可见的那个 feed-item
+                    const rect = item.getBoundingClientRect();
+                    if (rect.bottom < 0 || rect.top > window.innerHeight) continue;
+                    const link = item.querySelector('a[href*="/user/MS4wLj"]');
+                    if (link) {
+                        const href = link.getAttribute('href') || '';
+                        const m = href.match(/MS4wLj[A-Za-z0-9_\-]+/);
+                        if (m) {
+                            console.log('[抖音一键拉黑] 推荐流兜底提取到作者 sec_uid:', m[0]);
+                            return m[0];
+                        }
+                    }
+                }
+                return null;
+            },
+            () => {
+                // 兜底 4（推荐流兜底）：不限定 feed-item，直接全文档搜
+                // 第一个匹配到的 /user/MS4wLj 链接（一般就是当前可见视频的作者）
+                const link = document.querySelector('a[href*="/user/MS4wLj"]');
+                if (link) {
+                    const href = link.getAttribute('href') || '';
+                    const m = href.match(/MS4wLj[A-Za-z0-9_\-]+/);
+                    if (m) {
+                        console.log('[抖音一键拉黑] 全文档兜底提取到作者 sec_uid:', m[0]);
+                        return m[0];
+                    }
+                }
+                return null;
             }
         ];
         for (const fn of candidates) {
@@ -4130,6 +4966,7 @@
                 }
             } catch (e) {}
         }
+        console.warn('[抖音一键拉黑] getCurrentVideoAuthorSecUid 所有兜底都失败，未识别到视频作者');
         return null;
     }
 
@@ -4242,16 +5079,186 @@
             await waitForBatchIdle();
 
             // 最后拉黑作者：每次重取一次 sec_uid（长按期间可能未及时识别）
+            // 检查开关：只有开启开关时才拉黑视频作者
+            if (!blockVideoAuthorAfterBatch) {
+                console.log('[抖音一键拉黑] 批量结束, 开关关闭, 跳过拉黑视频作者');
+                setTimeout(() => {
+                    hideBatchBlockIndicator();
+                    const { success, failed } = batchBlockState.stats;
+                    showToast(`批量拉黑结束：成功 ${success}，失败 ${failed}`);
+                }, 600);
+
+                // 60秒后清空已处理集合，避免内存泄漏
+                setTimeout(() => {
+                    batchBlockState.processedUids.clear();
+                    batchBlockState.stats = { success: 0, failed: 0, authorPending: 0 };
+                }, 60000);
+                return;
+            }
+
+            // 获取视频作者 sec_uid - 使用与刷视频时相同的函数
             let authorSecUid = batchBlockState.authorSecUid;
+            
+            // 方式1：使用预存的作者信息
             if (!authorSecUid) {
+                console.log('[抖音一键拉黑] 预存作者信息为空，尝试重新获取...');
                 try {
                     authorSecUid = getCurrentVideoAuthorSecUid();
-                    batchBlockState.authorSecUid = authorSecUid;
-                } catch (e) {}
+                } catch (e) {
+                    console.warn('[抖音一键拉黑] getCurrentVideoAuthorSecUid 失败:', e);
+                }
             }
-            console.log('[抖音一键拉黑] 批量结束, blockVideoAuthorAfterBatch=', blockVideoAuthorAfterBatch, ' authorSecUid=', authorSecUid, ' 已处理=', batchBlockState.processedUids.has(authorSecUid));
+            
+            // 方式2：使用视频详情页获取函数（与刷视频时相同）
+            if (!authorSecUid) {
+                try {
+                    const authorInfo = getAuthorInfoFromVideoDetailPage();
+                    if (authorInfo && authorInfo.secUid) {
+                        authorSecUid = authorInfo.secUid;
+                        console.log('[抖音一键拉黑] 从视频详情页获取到作者:', authorSecUid);
+                    }
+                } catch (e) {
+                    console.warn('[抖音一键拉黑] getAuthorInfoFromVideoDetailPage 失败:', e);
+                }
+            }
+            
+            // 方式3：从当前播放的视频卡片获取（针对推荐流）
+            if (!authorSecUid) {
+                try {
+                    // 查找当前可见的视频卡片
+                    const videoCards = document.querySelectorAll('[data-e2e="feed-item"], .swiper-slide-active, [class*="video-card"], [class*="feed-card"]');
+                    for (const card of videoCards) {
+                        const rect = card.getBoundingClientRect();
+                        // 检查是否在视口中央区域
+                        if (rect.top < window.innerHeight / 2 && rect.bottom > window.innerHeight / 2) {
+                            // 在卡片中查找作者链接
+                            const authorLinks = card.querySelectorAll('a[href*="/user/MS4wLj"]');
+                            for (const link of authorLinks) {
+                                const href = link.getAttribute('href') || '';
+                                const m = href.match(/MS4wLj[A-Za-z0-9_\-]+/);
+                                if (m) {
+                                    authorSecUid = m[0];
+                                    console.log('[抖音一键拉黑] 从当前视频卡片获取到作者:', authorSecUid);
+                                    break;
+                                }
+                            }
+                            if (authorSecUid) break;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[抖音一键拉黑] 从视频卡片获取作者失败:', e);
+                }
+            }
+            
+            // 方式4：从页面上的视频详情区域获取
+            if (!authorSecUid) {
+                try {
+                    // 尝试从视频详情页的作者区域获取
+                    const detailSelectors = [
+                        '[data-e2e="video-info-username"]',
+                        '.video-info-container a[href*="/user/"]',
+                        '.author-info a[href*="/user/"]',
+                        '[class*="author"] a[href*="/user/MS4wLj"]',
+                        'a[href*="/user/MS4wLj"]'
+                    ];
+                    
+                    for (const selector of detailSelectors) {
+                        const link = document.querySelector(selector);
+                        if (link) {
+                            const href = link.getAttribute('href') || '';
+                            const m = href.match(/MS4wLj[A-Za-z0-9_\-]+/);
+                            if (m) {
+                                authorSecUid = m[0];
+                                console.log('[抖音一键拉黑] 从视频详情区域获取到作者:', authorSecUid, '选择器:', selector);
+                                break;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[抖音一键拉黑] 从视频详情区域获取作者失败:', e);
+                }
+            }
+            
+            // 方式5：从已插入的拉黑按钮获取（可能是视频作者的按钮）
+            if (!authorSecUid) {
+                try {
+                    // 查找所有拉黑按钮，尝试找到视频作者的按钮
+                    const allBlockBtns = document.querySelectorAll('.douyin-block-btn[data-sec-uid], .douyin-video-detail-block-btn[data-sec-uid]');
+                    for (const btn of allBlockBtns) {
+                        const sec = btn.dataset.secUid;
+                        if (sec && sec.startsWith('MS4wLj')) {
+                            // 检查这个按钮是否在视频作者区域
+                            const parent = btn.closest('[data-e2e="video-info"], .video-info-container, .author-info, [class*="author"]');
+                            if (parent) {
+                                authorSecUid = sec;
+                                console.log('[抖音一键拉黑] 从视频作者区域的拉黑按钮获取到作者:', authorSecUid);
+                                break;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[抖音一键拉黑] 从拉黑按钮获取作者失败:', e);
+                }
+            }
 
-            if (blockVideoAuthorAfterBatch && authorSecUid && !batchBlockState.processedUids.has(authorSecUid)) {
+            // 方式6：从页面全局变量获取（SSR数据）
+            if (!authorSecUid) {
+                try {
+                    const win = unsafeWindow || window;
+                    // 尝试从 __SSR_DATA__ 获取
+                    if (win.__SSR_DATA__ && win.__SSR_DATA__.user && win.__SSR_DATA__.user.sec_uid) {
+                        authorSecUid = win.__SSR_DATA__.user.sec_uid;
+                        console.log('[抖音一键拉黑] 从 __SSR_DATA__.user 获取到作者:', authorSecUid);
+                    }
+                    // 尝试从 __INITIAL_STATE__ 获取
+                    else if (win.__INITIAL_STATE__ && win.__INITIAL_STATE__.user && win.__INITIAL_STATE__.user.sec_uid) {
+                        authorSecUid = win.__INITIAL_STATE__.user.sec_uid;
+                        console.log('[抖音一键拉黑] 从 __INITIAL_STATE__.user 获取到作者:', authorSecUid);
+                    }
+                    // 尝试从 render data 获取
+                    else if (win._SSR_HYDRATED_DATA && win._SSR_HYDRATED_DATA.user && win._SSR_HYDRATED_DATA.user.sec_uid) {
+                        authorSecUid = win._SSR_HYDRATED_DATA.user.sec_uid;
+                        console.log('[抖音一键拉黑] 从 _SSR_HYDRATED_DATA.user 获取到作者:', authorSecUid);
+                    }
+                } catch (e) {
+                    console.warn('[抖音一键拉黑] 从页面全局变量获取作者失败:', e);
+                }
+            }
+
+            // 方式7：兜底 - 如果当前是视频详情页，尝试触发视频详情页的拉黑按钮点击
+            if (!authorSecUid && isVideoDetailPage()) {
+                console.log('[抖音一键拉黑] 尝试通过视频详情页按钮兜底拉黑作者');
+                try {
+                    const detailBtn = document.querySelector('.douyin-video-detail-block-btn');
+                    if (detailBtn && detailBtn.dataset.blocked !== 'true') {
+                        // 模拟点击视频详情页的拉黑按钮
+                        detailBtn.click();
+                        batchBlockState.stats.success++;
+                        batchBlockState.phaseLabel = '已通过详情页按钮拉黑作者';
+                        updateBatchIndicator();
+                        setTimeout(() => {
+                            hideBatchBlockIndicator();
+                            const { success, failed } = batchBlockState.stats;
+                            showToast(`批量拉黑结束：成功 ${success}，失败 ${failed}`);
+                        }, 600);
+
+                        // 60秒后清空已处理集合
+                        setTimeout(() => {
+                            batchBlockState.processedUids.clear();
+                            batchBlockState.stats = { success: 0, failed: 0, authorPending: 0 };
+                        }, 60000);
+                        return;
+                    }
+                } catch (e) {
+                    console.warn('[抖音一键拉黑] 通过视频详情页按钮兜底失败:', e);
+                }
+            }
+
+            batchBlockState.authorSecUid = authorSecUid;
+            
+            console.log('[抖音一键拉黑] 批量结束, blockVideoAuthorAfterBatch=', blockVideoAuthorAfterBatch, ' authorSecUid=', authorSecUid, ' 已处理=', authorSecUid ? batchBlockState.processedUids.has(authorSecUid) : 'n/a');
+
+            if (authorSecUid && !batchBlockState.processedUids.has(authorSecUid)) {
                 batchBlockState.phaseLabel = '拉黑视频作者…';
                 updateBatchIndicator();
                 try {
@@ -4290,9 +5297,10 @@
                     batchBlockState.stats.failed++;
                 }
                 updateBatchIndicator();
-            } else if (blockVideoAuthorAfterBatch && !authorSecUid) {
+            } else if (!authorSecUid) {
                 batchBlockState.phaseLabel = '未识别到视频作者';
                 updateBatchIndicator();
+                console.warn('[抖音一键拉黑] 未能识别到视频作者，跳过作者拉黑');
             }
 
             setTimeout(() => {
@@ -4310,7 +5318,7 @@
     }
 
     // 等待批处理空闲（队列执行完）
-    function waitForBatchIdle(maxWait = 5000) {
+    function waitForBatchIdle(maxWait = 3000) {
         return new Promise((resolve) => {
             const t0 = Date.now();
             const tick = () => {
@@ -4477,11 +5485,17 @@
     const STORAGE_HIDE_ON_BLOCK_WORD = 'douyin-block-hide-on-blockword';
     const STORAGE_LOG_BLOCKED = 'douyin-block-log-enabled';
     const STORAGE_LOG_DATA = 'douyin-block-log-data';
+    // 场景开关配置
+    const STORAGE_ENABLE_DANMU_BLOCK = 'douyin-block-enable-danmu';
+    const STORAGE_ENABLE_LIVE_BLOCK = 'douyin-block-enable-live';
+    const STORAGE_ENABLE_COMMENT_BLOCK = 'douyin-block-enable-comment';
+    const STORAGE_ENABLE_RECOMMEND_BLOCK = 'douyin-block-enable-recommend';
+    const STORAGE_ENABLE_VIDEO_DETAIL_BLOCK = 'douyin-block-enable-video-detail';
     // const STORAGE_AUTO_DISLIKE = 'douyin-block-auto-dislike'; // 已注释：自动不感兴趣功能不完善
     let blockShortcutKey = localStorage.getItem(STORAGE_KEY) || 'Q';
     let blockShortcutModifiers = JSON.parse(localStorage.getItem(STORAGE_MODIFIERS_KEY) || '{}');
     let commentShortcutEnabled = localStorage.getItem(STORAGE_COMMENT_SHORTCUT_KEY) !== 'false'; // 默认开启
-    let batchLongPressMs = parseInt(localStorage.getItem(STORAGE_LONG_PRESS_MS) || '5000', 10);
+    let batchLongPressMs = parseInt(localStorage.getItem(STORAGE_LONG_PRESS_MS) || '3000', 10);
     // let autoDislikeOnBlock = localStorage.getItem(STORAGE_AUTO_DISLIKE) === 'true'; // 已注释
     if (!Number.isFinite(batchLongPressMs) || batchLongPressMs < 500) batchLongPressMs = 5000;
     let batchConcurrency = parseInt(localStorage.getItem(STORAGE_BATCH_CONCURRENCY) || '10', 10);
@@ -4498,6 +5512,12 @@
     let hideCommentsOnBlockWord = localStorage.getItem(STORAGE_HIDE_ON_BLOCK_WORD) !== 'false'; // 默认隐藏
     // 拉黑日志相关
     let logBlockedEnabled = localStorage.getItem(STORAGE_LOG_BLOCKED) === 'true';
+    // 场景开关变量（默认：评论区、推荐视频开启；弹幕、直播间、视频详情关闭）
+    let enableDanmuBlock = localStorage.getItem(STORAGE_ENABLE_DANMU_BLOCK) === 'true';
+    let enableLiveBlock = localStorage.getItem(STORAGE_ENABLE_LIVE_BLOCK) === 'true';
+    let enableCommentBlock = localStorage.getItem(STORAGE_ENABLE_COMMENT_BLOCK) !== 'false';
+    let enableRecommendBlock = localStorage.getItem(STORAGE_ENABLE_RECOMMEND_BLOCK) !== 'false';
+    let enableVideoDetailBlock = localStorage.getItem(STORAGE_ENABLE_VIDEO_DETAIL_BLOCK) === 'true';
     let blockLog = [];
     try {
         const raw = localStorage.getItem(STORAGE_LOG_DATA) || '[]';
@@ -4609,8 +5629,11 @@
             case 'manual-unblock': return '解除';
             case 'batch': return '批量';
             case 'batch-author': return '批量-作者';
+            case '弹幕': return '弹幕';
+            case 'danmu': return '弹幕';
             default:
                 if (s && s.startsWith('keyword:')) return '关键词(' + s.slice(8) + ')';
+                if (s && s.startsWith('弹幕:')) return '弹幕';
                 return s || '-';
         }
     }
@@ -5172,78 +6195,219 @@
         const overlay = document.createElement('div');
         overlay.className = 'douyin-block-settings-overlay';
         overlay.innerHTML = `
-            <div class="douyin-block-settings-panel" style="max-height: 88vh; overflow-y: auto;">
+            <div class="douyin-block-settings-panel" style="max-height: 88vh; overflow-y: auto; width: 420px;">
                 <div class="douyin-block-settings-title">
-                    <span>拉黑快捷键设置</span>
+                    <span>插件设置</span>
                     <span class="douyin-block-settings-close">×</span>
                 </div>
-                <div class="douyin-block-settings-row">
-                    <span class="douyin-block-settings-label">快捷键</span>
-                    <input type="text" class="douyin-block-settings-input" id="block-shortcut-input" value="${getShortcutDisplayName()}" placeholder="按组合键">
+                <div class="douyin-block-settings-tabs">
+                    <button class="douyin-block-settings-tab active" data-tab="settings">功能设置</button>
+                    <button class="douyin-block-settings-tab" data-tab="about">关于</button>
                 </div>
-                <div class="douyin-block-settings-row" style="margin-top: 12px;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">长按触发批量时间<br><span style="font-size: 11px; color: #888;">（按住快捷键多久后进入批量拉黑，单位：毫秒，最小 500）</span></span>
-                    <input type="number" min="500" max="60000" step="100" class="douyin-block-settings-input" id="longpress-input" value="${batchLongPressMs}" style="width:90px;">
+
+                <!-- 功能设置标签页 -->
+                <div class="douyin-block-settings-tab-content active" id="tab-settings">
+                    <div class="douyin-block-settings-row">
+                        <span class="douyin-block-settings-label">快捷键</span>
+                        <input type="text" class="douyin-block-settings-input" id="block-shortcut-input" value="${getShortcutDisplayName()}" placeholder="按组合键">
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">长按触发批量时间<br><span style="font-size: 11px; color: #888;">（按住快捷键多久后进入批量拉黑，单位：毫秒，最小 500）</span></span>
+                        <input type="number" min="500" max="60000" step="100" class="douyin-block-settings-input" id="longpress-input" value="${batchLongPressMs}" style="width:90px;">
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">批量并发数量<br><span style="font-size: 11px; color: #888;">（同时拉黑多少个用户，建议 3-15，过高可能触发风控）</span></span>
+                        <input type="number" min="1" max="50" step="1" class="douyin-block-settings-input" id="concurrency-input" value="${batchConcurrency}" style="width:90px;">
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #333;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">批量拉黑后拉黑视频作者（失效）<br><span style="font-size: 11px; color: #888;">（暂不可用，失效，存在问题）</span></span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="author-block-toggle" ${blockVideoAuthorAfterBatch ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider" id="author-block-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">允许快捷键拉黑评论区用户<br><span style="font-size: 11px; color: #888;">（关闭后快捷键不会拉黑评论区用户）</span></span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="comment-shortcut-toggle" ${commentShortcutEnabled ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider" id="comment-shortcut-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #333;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">显示场景拉黑按钮<br><span style="font-size: 11px; color: #888;">（选择在哪些场景显示拉黑按钮）</span></span>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 8px; padding-left: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1; font-size: 13px;">评论区</span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="enable-comment-block" ${enableCommentBlock ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 8px; padding-left: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1; font-size: 13px;">推荐视频</span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="enable-recommend-block" ${enableRecommendBlock ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 8px; padding-left: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1; font-size: 13px;">弹幕</span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="enable-danmu-block" ${enableDanmuBlock ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 8px; padding-left: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1; font-size: 13px;">直播间</span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="enable-live-block" ${enableLiveBlock ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 8px; padding-left: 12px;">
+                        <span class="douyin-block-settings-label" style="flex: 1; font-size: 13px;">视频详情</span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="enable-video-detail-block" ${enableVideoDetailBlock ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #333;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">关键词自动拉黑<br><span style="font-size: 11px; color: #888;">（评论命中关键词自动拉黑该用户）</span></span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="word-block-toggle" ${blockWordEnabled ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider" id="word-block-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 12px; align-items: flex-start;">
+                        <span class="douyin-block-settings-label" style="flex: 1; padding-right: 10px;">屏蔽词列表<br><span style="font-size: 11px; color: #888;">（一行一个关键词，命中即拉黑）</span></span>
+                    </div>
+                    <textarea id="block-words-input" placeholder="一行一个关键词" style="width:100%;min-height:90px;max-height:160px;box-sizing:border-box;background:#2a2a2a;color:#fff;border:1px solid #333;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;font-family:inherit;">${blockWords.map(w => escapeHtml(w)).join('\n')}</textarea>
+                    <div class="douyin-block-settings-row" style="margin-top: 8px;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">命中后隐藏该评论/弹幕<br><span style="font-size: 11px; color: #888;">（关闭后只标记不隐藏）</span></span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="word-hide-toggle" ${hideCommentsOnBlockWord ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider" id="word-hide-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #333;">
+                        <span class="douyin-block-settings-label" style="flex: 1;">记录拉黑操作<br><span style="font-size: 11px; color: #888;">（开启后所有拉黑的用户会保存到日志，可查看/清除）</span></span>
+                        <label class="douyin-block-settings-switch">
+                            <input type="checkbox" id="log-block-toggle" ${logBlockedEnabled ? 'checked' : ''}>
+                            <span class="douyin-block-settings-slider" id="log-block-slider"></span>
+                        </label>
+                    </div>
+                    <div class="douyin-block-settings-row" style="margin-top: 8px;">
+                        <button id="open-block-log-btn" class="douyin-block-settings-save" style="background:#2a2a2a;margin-top:0;flex:1;">查看拉黑记录（${blockLog.length}）</button>
+                    </div>
+                    <div class="douyin-block-settings-hint">
+                        点击输入框后按组合键设置<br>
+                        支持: Ctrl+Q, Alt+Q, Ctrl+Alt+Q, Shift+F4 等<br>
+                        右键点击拉黑按钮可打开设置<br>
+                        按 ESC 关闭设置<br><br>
+                        <b style="color:#ccc;">长按快捷键可批量拉黑评论区所有用户，松开后收尾</b>
+                    </div>
+                    <button id="douyin-block-settings-save-btn" class="douyin-block-settings-save">保存</button>
                 </div>
-                <div class="douyin-block-settings-row" style="margin-top: 12px;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">批量并发数量<br><span style="font-size: 11px; color: #888;">（同时拉黑多少个用户，建议 3-15，过高可能触发风控）</span></span>
-                    <input type="number" min="1" max="50" step="1" class="douyin-block-settings-input" id="concurrency-input" value="${batchConcurrency}" style="width:90px;">
+
+                <!-- 关于标签页 -->
+                <div class="douyin-block-settings-tab-content" id="tab-about" style="display: none;">
+                    <div class="douyin-about-section">
+                        <div class="douyin-about-author-card">
+                            <img src="https://avatars.githubusercontent.com/u/178802469?v=4&size=64" alt="作者头像" class="douyin-about-avatar">
+                            <div class="douyin-about-author-info">
+                                <div class="douyin-about-author-name">Lun.</div>
+                                <div class="douyin-about-author-role">插件作者 / Developer</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="douyin-about-section">
+                        <div class="douyin-about-section-title">插件信息</div>
+                        <div class="douyin-about-info-item">
+                            <div class="douyin-about-info-icon">📦</div>
+                            <div class="douyin-about-info-content">
+                                <div class="douyin-about-info-label">插件名称</div>
+                                <div class="douyin-about-info-value">抖音一键拉黑 <span class="douyin-about-version-badge">v5.6</span></div>
+                            </div>
+                        </div>
+                        <div class="douyin-about-info-item">
+                            <div class="douyin-about-info-icon">📄</div>
+                            <div class="douyin-about-info-content">
+                                <div class="douyin-about-info-label">开源协议</div>
+                                <div class="douyin-about-info-value">MIT License</div>
+                            </div>
+                        </div>
+                        <div class="douyin-about-info-item">
+                            <div class="douyin-about-info-icon">✉️</div>
+                            <div class="douyin-about-info-content">
+                                <div class="douyin-about-info-label">联系邮箱</div>
+                                <div class="douyin-about-info-value"><a href="mailto:admin@lunos.vip">admin@lunos.vip</a></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="douyin-about-section">
+                        <div class="douyin-about-section-title">相关链接</div>
+                        <div class="douyin-about-links">
+                            <a href="https://github.com/Lun-OS/Tampermonkey-Douyin_BlockPlus" target="_blank" class="douyin-about-link-btn">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                                GitHub
+                            </a>
+                            <a href="https://greasyfork.org/zh-CN/scripts/575489-%E6%8A%96%E9%9F%B3%E4%B8%80%E9%94%AE%E6%8B%89%E9%BB%91" target="_blank" class="douyin-about-link-btn">
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 13A6 6 0 118 2a6 6 0 010 12z"/><path d="M8 4a.75.75 0 01.75.75v3.5h2.5a.75.75 0 010 1.5h-3.5a.75.75 0 01-.75-.75v-4.5A.75.75 0 018 4z"/></svg>
+                                GreasyFork
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="douyin-about-section">
+                        <div class="douyin-about-section-title">功能特性</div>
+                        <div style="font-size: 13px; color: #aaa; line-height: 1.8;">
+                            • 快捷键一键拉黑视频/评论/弹幕作者<br>
+                            • 长按快捷键批量拉黑评论区所有用户<br>
+                            • 关键词自动识别并拉黑违规用户<br>
+                            • 支持直播间的用户拉黑<br>
+                            • 拉黑操作日志记录与管理<br>
+                            • 完全本地运行，保护隐私安全
+                        </div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 20px; padding-top: 16px; border-top: 1px solid #333;">
+                        <div style="font-size: 12px; color: #666;">
+                            Made with  by Lun. | 本插件与抖音官方无关
+                        </div>
+                    </div>
                 </div>
-                <div class="douyin-block-settings-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #333;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">批量拉黑后拉黑视频作者<br><span style="font-size: 11px; color: #888;">（评论区批量拉黑结束后，把该视频的作者也一并拉黑）</span></span>
-                    <label class="douyin-block-settings-switch">
-                        <input type="checkbox" id="author-block-toggle" ${blockVideoAuthorAfterBatch ? 'checked' : ''}>
-                        <span class="douyin-block-settings-slider" id="author-block-slider"></span>
-                    </label>
-                </div>
-                <div class="douyin-block-settings-row" style="margin-top: 12px;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">允许快捷键拉黑评论区用户<br><span style="font-size: 11px; color: #888;">（关闭后快捷键不会拉黑评论区用户）</span></span>
-                    <label class="douyin-block-settings-switch">
-                        <input type="checkbox" id="comment-shortcut-toggle" ${commentShortcutEnabled ? 'checked' : ''}>
-                        <span class="douyin-block-settings-slider" id="comment-shortcut-slider"></span>
-                    </label>
-                </div>
-                <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #333;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">关键词自动拉黑<br><span style="font-size: 11px; color: #888;">（评论命中关键词自动拉黑该用户）</span></span>
-                    <label class="douyin-block-settings-switch">
-                        <input type="checkbox" id="word-block-toggle" ${blockWordEnabled ? 'checked' : ''}>
-                        <span class="douyin-block-settings-slider" id="word-block-slider"></span>
-                    </label>
-                </div>
-                <div class="douyin-block-settings-row" style="margin-top: 12px; align-items: flex-start;">
-                    <span class="douyin-block-settings-label" style="flex: 1; padding-right: 10px;">屏蔽词列表<br><span style="font-size: 11px; color: #888;">（一行一个关键词，命中即拉黑）</span></span>
-                </div>
-                <textarea id="block-words-input" placeholder="一行一个关键词" style="width:100%;min-height:90px;max-height:160px;box-sizing:border-box;background:#2a2a2a;color:#fff;border:1px solid #333;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;font-family:inherit;">${blockWords.map(w => escapeHtml(w)).join('\n')}</textarea>
-                <div class="douyin-block-settings-row" style="margin-top: 8px;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">命中后隐藏该评论<br><span style="font-size: 11px; color: #888;">（关闭后只标记不隐藏）</span></span>
-                    <label class="douyin-block-settings-switch">
-                        <input type="checkbox" id="word-hide-toggle" ${hideCommentsOnBlockWord ? 'checked' : ''}>
-                        <span class="douyin-block-settings-slider" id="word-hide-slider"></span>
-                    </label>
-                </div>
-                <div class="douyin-block-settings-row" style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #333;">
-                    <span class="douyin-block-settings-label" style="flex: 1;">记录拉黑操作<br><span style="font-size: 11px; color: #888;">（开启后所有拉黑的用户会保存到日志，可查看/清除）</span></span>
-                    <label class="douyin-block-settings-switch">
-                        <input type="checkbox" id="log-block-toggle" ${logBlockedEnabled ? 'checked' : ''}>
-                        <span class="douyin-block-settings-slider" id="log-block-slider"></span>
-                    </label>
-                </div>
-                <div class="douyin-block-settings-row" style="margin-top: 8px;">
-                    <button id="open-block-log-btn" class="douyin-block-settings-save" style="background:#2a2a2a;margin-top:0;flex:1;">查看拉黑记录（${blockLog.length}）</button>
-                </div>
-                <div class="douyin-block-settings-hint">
-                    点击输入框后按组合键设置<br>
-                    支持: Ctrl+Q, Alt+Q, Ctrl+Alt+Q, Shift+F4 等<br>
-                    右键点击拉黑按钮可打开设置<br>
-                    按 ESC 关闭设置<br><br>
-                    <b style="color:#ccc;">长按快捷键可批量拉黑评论区所有用户，松开后收尾</b>
-                </div>
-                <button id="douyin-block-settings-save-btn" class="douyin-block-settings-save">保存</button>
             </div>
         `;
 
         document.body.appendChild(overlay);
         console.log('[抖音一键拉黑] 设置面板已添加到页面');
+
+        // 标签页切换逻辑
+        const tabs = overlay.querySelectorAll('.douyin-block-settings-tab');
+        const tabContents = overlay.querySelectorAll('.douyin-block-settings-tab-content');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const targetTab = tab.dataset.tab;
+
+                // 切换标签按钮状态
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // 切换内容显示
+                tabContents.forEach(content => {
+                    content.style.display = 'none';
+                    content.classList.remove('active');
+                });
+                const targetContent = overlay.querySelector(`#tab-${targetTab}`);
+                if (targetContent) {
+                    targetContent.style.display = 'block';
+                    targetContent.classList.add('active');
+                }
+            });
+        });
 
         const input = overlay.querySelector('#block-shortcut-input');
         const closeBtn = overlay.querySelector('.douyin-block-settings-close');
@@ -5257,7 +6421,12 @@
         const wordHideToggle = overlay.querySelector('#word-hide-toggle');
         const logToggle = overlay.querySelector('#log-block-toggle');
         const openLogBtn = overlay.querySelector('#open-block-log-btn');
-        // const autoDislikeToggle = overlay.querySelector('#auto-dislike-toggle'); // 已注释：自动不感兴趣功能不完善
+        // 场景开关
+        const enableDanmuToggle = overlay.querySelector('#enable-danmu-block');
+        const enableLiveToggle = overlay.querySelector('#enable-live-block');
+        const enableCommentToggle = overlay.querySelector('#enable-comment-block');
+        const enableRecommendToggle = overlay.querySelector('#enable-recommend-block');
+        const enableVideoDetailToggle = overlay.querySelector('#enable-video-detail-block');
 
         if (!saveBtn) {
             console.error('[抖音一键拉黑] 未找到保存按钮，初始化失败');
@@ -5275,7 +6444,12 @@
         let tempWordsText = wordsInput.value;
         let tempHideOnWord = hideCommentsOnBlockWord;
         let tempLogEnabled = logBlockedEnabled;
-        // let tempAutoDislike = autoDislikeOnBlock; // 已注释：自动不感兴趣功能不完善
+        // 场景开关临时变量
+        let tempEnableDanmu = enableDanmuBlock;
+        let tempEnableLive = enableLiveBlock;
+        let tempEnableComment = enableCommentBlock;
+        let tempEnableRecommend = enableRecommendBlock;
+        let tempEnableVideoDetail = enableVideoDetailBlock;
 
         input.focus();
         input.select();
@@ -5305,7 +6479,32 @@
             tempLogEnabled = e.target.checked;
         });
 
-        // 拉黑后自动"不感兴趣"开关 —— 已注释：功能不完善
+        // 场景开关事件监听
+        if (enableDanmuToggle) {
+            enableDanmuToggle.addEventListener('change', (e) => {
+                tempEnableDanmu = e.target.checked;
+            });
+        }
+        if (enableLiveToggle) {
+            enableLiveToggle.addEventListener('change', (e) => {
+                tempEnableLive = e.target.checked;
+            });
+        }
+        if (enableCommentToggle) {
+            enableCommentToggle.addEventListener('change', (e) => {
+                tempEnableComment = e.target.checked;
+            });
+        }
+        if (enableRecommendToggle) {
+            enableRecommendToggle.addEventListener('change', (e) => {
+                tempEnableRecommend = e.target.checked;
+            });
+        }
+        if (enableVideoDetailToggle) {
+            enableVideoDetailToggle.addEventListener('change', (e) => {
+                tempEnableVideoDetail = e.target.checked;
+            });
+        }
 
         // 关键词 textarea
         wordsInput.addEventListener('input', (e) => {
@@ -5370,7 +6569,12 @@
                 blockWords = (tempWordsText || '').split('\n').map(s => s.trim()).filter(Boolean);
                 hideCommentsOnBlockWord = !!tempHideOnWord;
                 logBlockedEnabled = !!tempLogEnabled;
-                // autoDislikeOnBlock = !!tempAutoDislike; // 已注释：自动不感兴趣功能不完善
+                // 保存场景开关设置
+                enableDanmuBlock = !!tempEnableDanmu;
+                enableLiveBlock = !!tempEnableLive;
+                enableCommentBlock = !!tempEnableComment;
+                enableRecommendBlock = !!tempEnableRecommend;
+                enableVideoDetailBlock = !!tempEnableVideoDetail;
 
                 localStorage.setItem(STORAGE_KEY, blockShortcutKey);
                 localStorage.setItem(STORAGE_MODIFIERS_KEY, JSON.stringify(blockShortcutModifiers));
@@ -5382,7 +6586,12 @@
                 saveBlockWords();
                 localStorage.setItem(STORAGE_HIDE_ON_BLOCK_WORD, String(hideCommentsOnBlockWord));
                 localStorage.setItem(STORAGE_LOG_BLOCKED, String(logBlockedEnabled));
-                // localStorage.setItem(STORAGE_AUTO_DISLIKE, String(autoDislikeOnBlock)); // 已注释
+                // 保存场景开关到 localStorage
+                localStorage.setItem(STORAGE_ENABLE_DANMU_BLOCK, String(enableDanmuBlock));
+                localStorage.setItem(STORAGE_ENABLE_LIVE_BLOCK, String(enableLiveBlock));
+                localStorage.setItem(STORAGE_ENABLE_COMMENT_BLOCK, String(enableCommentBlock));
+                localStorage.setItem(STORAGE_ENABLE_RECOMMEND_BLOCK, String(enableRecommendBlock));
+                localStorage.setItem(STORAGE_ENABLE_VIDEO_DETAIL_BLOCK, String(enableVideoDetailBlock));
 
                 showToast('设置已保存');
                 overlay.remove();
@@ -5584,23 +6793,31 @@
     startSettingsObserver();
 
     // 页面加载完成后初始化
+    function startInitialization() {
+        // 先检查是否已同意免责声明
+        if (checkDisclaimerAgreed()) {
+            userAgreedDisclaimer = true;
+            init();
+            observeNewVideos();
+        } else {
+            // 显示免责声明弹窗
+            setTimeout(() => {
+                showDisclaimerDialog();
+            }, 500);
+        }
+    }
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             console.log('[抖音一键拉黑] DOMContentLoaded');
-            setTimeout(() => {
-                init();
-                observeNewVideos();
-            }, 1000);
+            setTimeout(startInitialization, 1000);
         });
     } else {
         console.log('[抖音一键拉黑] 页面已加载');
-        setTimeout(() => {
-            init();
-            observeNewVideos();
-        }, 1000);
+        setTimeout(startInitialization, 1000);
     }
 
-    console.log('[抖音一键拉黑] v5.5 关键词拉黑 + 拉黑日志版脚本加载完成');
+    console.log('[抖音一键拉黑] v5.6 关键词拉黑 + 拉黑日志版脚本加载完成');
     console.log('[抖音一键拉黑] 当前快捷键: ' + getShortcutDisplayName());
     console.log('[抖音一键拉黑] 长按 >5秒 可批量拉黑评论区所有用户');
     console.log('[抖音一键拉黑] 右键点击拉黑按钮可打开设置面板');
