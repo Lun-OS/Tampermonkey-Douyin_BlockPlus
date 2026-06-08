@@ -14,8 +14,8 @@
 // @grant        unsafeWindow
 // @license      MIT
 // @run-at       document-end
-// @downloadURL https://update.greasyfork.org/scripts/575489/%E6%8A%96%E9%9F%B3%E4%B8%80%E9%94%AE%E6%8B%89%E9%BB%91.user.js
-// @updateURL https://update.greasyfork.org/scripts/575489/%E6%8A%96%E9%9F%B3%E4%B8%80%E9%94%AE%E6%8B%89%E9%BB%91.meta.js
+// @downloadURL https://raw.githubusercontent.com/Lun-OS/Tampermonkey-Douyin_BlockPlus/main/douyin-block.user.js
+// @updateURL https://raw.githubusercontent.com/Lun-OS/Tampermonkey-Douyin_BlockPlus/main/douyin-block.user.js
 // ==/UserScript==
 
 (function() {
