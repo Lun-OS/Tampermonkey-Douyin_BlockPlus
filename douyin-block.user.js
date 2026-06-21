@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         抖音一键拉黑
 // @namespace    https://github.com/Lun-OS/Tampermonkey-Douyin_BlockPlus
-// @version      5.8
+// @version      5.9
 // @description  抖音拉黑从未如此丝滑——0.01秒接口直封，无需模拟点击，无需跳转菜单。全场景（推荐/详情/评论/直播间...）按钮自动就位，点一下瞬间屏蔽/解除，纯净体验零等待。长按快捷键批量拉黑评论区所有用户（并发数与触发时间可配置），作者评论可选择性最后拉黑。关键词自动拉黑 + 命中隐藏，拉黑记录可查看与清除。
 // @author       Lun.
 // @match        https://www.douyin.com/*
@@ -14,14 +14,14 @@
 // @grant        unsafeWindow
 // @license      MIT
 // @run-at       document-end
-// @downloadURL https://raw.githubusercontent.com/Lun-OS/Tampermonkey-Douyin_BlockPlus/main/douyin-block.user.js
-// @updateURL https://raw.githubusercontent.com/Lun-OS/Tampermonkey-Douyin_BlockPlus/main/douyin-block.user.js
+// @downloadURL https://update.greasyfork.org/scripts/575489/%E6%8A%96%E9%9F%B3%E4%B8%80%E9%94%AE%E6%8B%89%E9%BB%91.user.js
+// @updateURL https://update.greasyfork.org/scripts/575489/%E6%8A%96%E9%9F%B3%E4%B8%80%E9%94%AE%E6%8B%89%E9%BB%91.meta.js
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    console.log('[抖音拉黑] v5.8 (弹幕接口拦截优化版)');
+    console.log('[抖音拉黑] v5.9 (弹幕接口拦截优化版)');
 
     // 清理旧版本的设置项
     localStorage.removeItem('douyin-block-comment-shortcut-enabled');
@@ -998,6 +998,7 @@
             // 同意后立即初始化
             init();
             observeNewVideos();
+            setupUrlChangeListener();
             showToast('感谢您的信任，插件已启用');
         });
 
@@ -3697,7 +3698,8 @@
     function processAllDanmuForBlockWord() {
         if (!blockWordEnabled) return;
         if (!blockWords || blockWords.length === 0) return;
-        const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
+        // 不依赖自动生成的 class，仅用稳定的数据属性定位弹幕元素
+        const items = document.querySelectorAll('[data-danmu-id], [data-danmaku-user-id]');
         items.forEach(handleDanmuBlockWord);
     }
 
@@ -4075,7 +4077,8 @@
         const needProcessDanmu = enableDanmuBlock || enableDanmuRightClick;
         if (!needProcessDanmu) return;
 
-        const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
+        // 不依赖自动生成的 class（如 jnuqoLJD/wkm0V7Bd 等），仅用稳定的数据属性定位弹幕元素
+        const items = document.querySelectorAll('[data-danmu-id], [data-danmaku-user-id]');
         let processedCount = 0;
         let skippedCount = 0;
 
@@ -4167,7 +4170,8 @@
         // 按钮插完后再走关键词检测（处理不需要隐藏的情况）
         // 注意：手动拉黑后不需要隐藏弹幕，所以使用 handleDanmuBlockWordNoHide
         if (blockWordEnabled && !hideCommentsOnBlockWord) {
-            const items = document.querySelectorAll('.jnuqoLJD[data-danmu-id], .jnuqoLJD[data-danmaku-user-id]');
+            // 不依赖自动生成的 class，仅用稳定的数据属性定位弹幕元素
+            const items = document.querySelectorAll('[data-danmu-id], [data-danmaku-user-id]');
             items.forEach(handleDanmuBlockWordNoHide);
         }
     }
@@ -4489,20 +4493,78 @@
     // 为推荐页直播间播放器插入拉黑按钮
     // 从推荐页直播卡片的info区域提取用户信息（user链接中的 sec_uid）
     function getRecommendLiveStreamInfo(container) {
-        // 查找包含 sec_uid 的用户链接
-        const userLink = container.querySelector('a[href*="/user/MS4wLj"]');
-        if (!userLink) return null;
+        if (!container) return null;
+
+        // 1. 优先在卡片info区域（昵称附近）查找用户链接
+        //    这样可以避免误取到"下一个视频"或"相关推荐"中的用户链接
+        const infoArea = container.querySelector('.mW1rnCF4, .USi52T4u, [class*="info"]');
+
+        // 在info区域查找用户链接（用更宽松的匹配方式）
+        const allUserLinks = container.querySelectorAll('a[href*="/user/"]');
+
+        // 过滤掉"视频"链接（这些是普通视频而非直播主）
+        // 普通视频的链接通常带有 enter_method=video_title 或 vid= 参数
+        const liveLinks = Array.from(allUserLinks).filter(a => {
+            const href = a.getAttribute('href') || '';
+            // 排除明显是视频卡片的链接
+            if (/enter_method=video_title/.test(href)) return false;
+            if (/[?&]vid=/.test(href)) return false;
+            if (/[?&]from_gid=/.test(href)) return false;
+            // 排除live.douyin.com链接
+            if (href.includes('live.douyin.com')) return false;
+            return true;
+        });
+
+        // 优先使用 infoArea 内的用户链接
+        let userLink = null;
+        if (infoArea) {
+            userLink = infoArea.querySelector('a[href*="/user/"]');
+        }
+
+        // 如果infoArea里没有，退而求其次，从过滤后的liveLinks中取一个
+        if (!userLink && liveLinks.length > 0) {
+            userLink = liveLinks[0];
+        }
+
+        // 最后再退回原始查询（兼容旧版结构）
+        if (!userLink) {
+            userLink = container.querySelector('a[href*="/user/MS4wLj"]');
+        }
+
+        if (!userLink) {
+            // 调试：列出所有a链接的href，便于排查
+            const allHrefs = Array.from(container.querySelectorAll('a[href]'))
+                .map(a => a.getAttribute('href'))
+                .filter(h => h && h.length < 200)
+                .slice(0, 10);
+            console.log('[抖音一键拉黑] 推荐页直播卡片未找到用户链接，候选href:', allHrefs);
+            return null;
+        }
 
         const href = userLink.getAttribute('href') || '';
-        const secUidMatch = href.match(/MS4wLj[A-Za-z0-9_\-]{15,}/);
-        if (!secUidMatch) return null;
 
-        const nickname = userLink.textContent.replace(/^@/, '').trim();
+        // 尝试匹配多种 sec_uid 格式
+        let secUidMatch = href.match(/MS4wLj[A-Za-z0-9_\-]{15,}/);
+        if (!secUidMatch) {
+            // 兜底：直接提取 /user/ 后面的 id
+            secUidMatch = href.match(/\/user\/([^?&/]+)/);
+        }
 
-        return {
+        if (!secUidMatch) {
+            console.log('[抖音一键拉黑] 推荐页直播卡片用户链接中无 sec_uid:', href);
+            return null;
+        }
+
+        // 提取昵称：取昵称span或链接文本
+        const nickEl = (infoArea && infoArea.querySelector('[class*="nickname"], [class*="c9YbeHv6"]')) || userLink;
+        const nickname = (nickEl.textContent || '').replace(/^@/, '').trim();
+
+        const result = {
             secUid: secUidMatch[0],
             nickname: nickname || '主播'
         };
+        console.log('[抖音一键拉黑] 推荐页卡片直播主播已提取:', result);
+        return result;
     }
 
     function insertButtonForRecommendLiveStream() {
@@ -4710,7 +4772,7 @@
 
     // 主初始化函数 - 增强版
     function init() {
-        console.log('[抖音拉黑] 初始化 v5.8 (关键词拉黑 + 拉黑日志版)');
+        console.log('[抖音拉黑] 初始化 v5.9 (关键词拉黑 + 拉黑日志版)');
 
         // 检查用户是否同意免责协议
         if (!userAgreedDisclaimer && !checkDisclaimerAgreed()) {
@@ -6374,7 +6436,7 @@
                             <div class="douyin-about-info-icon">📦</div>
                             <div class="douyin-about-info-content">
                                 <div class="douyin-about-info-label">插件名称</div>
-                                <div class="douyin-about-info-value">抖音一键拉黑 <span class="douyin-about-version-badge">v5.8</span></div>
+                                <div class="douyin-about-info-value">抖音一键拉黑 <span class="douyin-about-version-badge">v5.9</span></div>
                             </div>
                         </div>
                         <div class="douyin-about-info-item">
@@ -6856,12 +6918,97 @@
             userAgreedDisclaimer = true;
             init();
             observeNewVideos();
+            // 启动 SPA 路由变化监听（必须晚于 init，避免被前几次初始化触发的 pushState 干扰）
+            setupUrlChangeListener();
         } else {
             // 显示免责声明弹窗
             setTimeout(() => {
                 showDisclaimerDialog();
             }, 500);
         }
+    }
+
+    // ========== SPA 路由变化监听（解决"从推荐页跳直播间不触发功能"） ==========
+    let _lastHandledUrl = location.href;
+    let _reinitTimer = null;
+
+    function reinitAfterUrlChange() {
+        if (!userAgreedDisclaimer) return;
+
+        // 1. 直播页：初始化直播间相关功能
+        if (isLiveStreamPage()) {
+            console.log('[抖音一键拉黑] URL 切换到直播间页，重新初始化直播功能');
+            setTimeout(() => {
+                try { insertButtonsForLiveStreamComments(); } catch (e) { console.log(e); }
+                try { insertButtonForLiveStreamHost(); } catch (e) { console.log(e); }
+                try { setupLiveStreamChatObserver(); } catch (e) { console.log(e); }
+            }, 500);
+            // 再次延迟，确保播放器加载完成
+            setTimeout(() => {
+                try { insertButtonForLiveStreamHost(); } catch (e) { console.log(e); }
+            }, 2000);
+        }
+        // 2. 视频详情页：初始化视频作者拉黑按钮
+        else if (isVideoDetailPage()) {
+            console.log('[抖音一键拉黑] URL 切换到视频详情页，重新初始化');
+            setTimeout(() => {
+                try { insertButtonForVideoDetailPage(); } catch (e) { console.log(e); }
+                try { insertButtonsForAll(); } catch (e) { console.log(e); }
+            }, 500);
+        }
+        // 3. 推荐页：插入直播卡片按钮
+        else {
+            console.log('[抖音一键拉黑] URL 切换到推荐页，刷新直播卡片按钮');
+            setTimeout(() => {
+                try { insertButtonForRecommendLiveStream(); } catch (e) { console.log(e); }
+                try { insertButtonsForAll(); } catch (e) { console.log(e); }
+            }, 500);
+        }
+    }
+
+    function handleUrlChange() {
+        const newUrl = location.href;
+        if (newUrl === _lastHandledUrl) return;
+        const oldUrl = _lastHandledUrl;
+        _lastHandledUrl = newUrl;
+        console.log('[抖音一键拉黑] 检测到 URL 变化:', oldUrl, '->', newUrl);
+
+        if (_reinitTimer) clearTimeout(_reinitTimer);
+        // 防抖：等待 SPA 渲染稳定后再初始化
+        _reinitTimer = setTimeout(reinitAfterUrlChange, 300);
+    }
+
+    function setupUrlChangeListener() {
+        // 1. 监听浏览器前进/后退
+        window.addEventListener('popstate', handleUrlChange);
+
+        // 2. Hook pushState / replaceState（抖音 SPA 主要走这两个）
+        try {
+            const origPush = history.pushState;
+            const origReplace = history.replaceState;
+            history.pushState = function (...args) {
+                const ret = origPush.apply(this, args);
+                handleUrlChange();
+                return ret;
+            };
+            history.replaceState = function (...args) {
+                const ret = origReplace.apply(this, args);
+                handleUrlChange();
+                return ret;
+            };
+        } catch (e) {
+            console.log('[抖音一键拉黑] hook history 失败:', e);
+        }
+
+        // 3. 兜底：监听 hashchange
+        window.addEventListener('hashchange', handleUrlChange);
+
+        // 4. 兜底：定期轮询 URL（捕获其它漏网情况，如 location 直接赋值）
+        setInterval(() => {
+            if (location.href !== _lastHandledUrl) handleUrlChange();
+        }, 1000);
+
+        console.log('[抖音一键拉黑] SPA 路由变化监听已启动');
     }
 
     if (document.readyState === 'loading') {
@@ -6874,7 +7021,7 @@
         setTimeout(startInitialization, 1000);
     }
 
-    console.log('[抖音一键拉黑] v5.8 关键词拉黑 + 拉黑日志版脚本加载完成');
+    console.log('[抖音一键拉黑] v5.9 关键词拉黑 + 拉黑日志版脚本加载完成');
     console.log('[抖音一键拉黑] 当前快捷键: ' + getShortcutDisplayName());
     console.log('[抖音一键拉黑] 长按 >5秒 可批量拉黑评论区所有用户');
     console.log('[抖音一键拉黑] 右键点击拉黑按钮可打开设置面板');
