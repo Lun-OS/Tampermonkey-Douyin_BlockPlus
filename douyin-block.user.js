@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         抖音一键拉黑
 // @namespace    https://github.com/Lun-OS/Tampermonkey-Douyin_BlockPlus
-// @version      5.9
+// @version      6.0
 // @description  抖音拉黑从未如此丝滑——0.01秒接口直封，无需模拟点击，无需跳转菜单。全场景（推荐/详情/评论/直播间...）按钮自动就位，点一下瞬间屏蔽/解除，纯净体验零等待。长按快捷键批量拉黑评论区所有用户（并发数与触发时间可配置），作者评论可选择性最后拉黑。关键词自动拉黑 + 命中隐藏，拉黑记录可查看与清除。
 // @author       Lun.
 // @match        https://www.douyin.com/*
@@ -21,7 +21,7 @@
 (function() {
     'use strict';
 
-    console.log('[抖音拉黑] v5.9 (弹幕接口拦截优化版)');
+    console.log('[抖音拉黑] v6.0 (弹幕接口拦截优化版)');
 
     // 清理旧版本的设置项
     localStorage.removeItem('douyin-block-comment-shortcut-enabled');
@@ -196,9 +196,9 @@
         }
         .douyin-block-toast {
             position: fixed;
-            top: 50%;
+            top: 60px;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.8);
             color: #fff;
             padding: 12px 24px;
@@ -209,10 +209,10 @@
             pointer-events: none;
         }
         @keyframes fadeInOut {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            0% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+            20% { opacity: 1; transform: translateX(-50%) scale(1); }
+            80% { opacity: 1; transform: translateX(-50%) scale(1); }
+            100% { opacity: 0; transform: translateX(-50%) scale(0.8); }
         }
         .douyin-block-settings-overlay {
             position: fixed !important;
@@ -836,6 +836,7 @@
                             // 延迟处理弹幕DOM
                             setTimeout(() => {
                                 processAllDanmu();
+                                processDanmakuDataListForBlockWord();
                             }, 100);
                         }
                     } catch (e) {
@@ -884,6 +885,7 @@
                     // 延迟处理弹幕DOM
                     setTimeout(() => {
                         processAllDanmu();
+                        processDanmakuDataListForBlockWord();
                     }, 100);
                 }
             }).catch(e => {
@@ -1012,9 +1014,113 @@
         return false;
     }
 
+    // ==================== 页面内存数据结构取用户（React Fiber awemeInfo） ====================
+    // 抖音前端把当前渲染卡片的完整数据存在 React Fiber 的 props.awemeInfo 里（与 DOM 结构解耦）。
+    // 该数据属于"当前这张卡片"，不会像接口那样预加载后面的视频，也不依赖头像 URL 解析，
+    // 从而避免"拉黑上一条视频作者"和"直播间id转用户id兼容性"问题。
+
+    // 从任意 DOM 元素出发，沿 React Fiber 向上查找最近的 awemeInfo 数据
+    function findAwemeInfoInFiber(startEl, expectedAwemeId) {
+        if (!startEl || typeof startEl !== 'object') return null;
+        const fiberKey = Object.keys(startEl).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+        if (!fiberKey) return null;
+        let node = startEl[fiberKey];
+        let depth = 0;
+        while (node && depth < 60) {
+            try {
+                const props = node.memoizedProps || node.pendingProps || {};
+                if (props.awemeInfo && props.awemeInfo.awemeId) {
+                    // 若提供期望的 aweme_id，则交叉校验，避免取到其它卡片的遗留数据
+                    if (!expectedAwemeId || String(props.awemeInfo.awemeId) === String(expectedAwemeId)) {
+                        return props.awemeInfo;
+                    }
+                }
+            } catch (e) {}
+            node = node.return;
+            depth++;
+        }
+        return null;
+    }
+
+    // 从 awemeInfo 提取作者信息（统一结构）
+    function getAuthorInfoFromAwemeInfo(awemeInfo) {
+        if (!awemeInfo) return null;
+        const author = awemeInfo.authorInfo || {};
+        const secUid = author.secUid || author.sec_uid || null;
+        if (!secUid) return null;
+        const avatarThumb = author.avatarThumb || {};
+        return {
+            secUid: secUid,
+            userId: author.uid || awemeInfo.authorUserId || null,
+            nickname: author.nickname || awemeInfo.name || null,
+            avatar: (avatarThumb.url_list && avatarThumb.url_list[0]) || null,
+            awemeId: awemeInfo.awemeId || null,
+            isLiveCard: !!(author.roomIdStr || author.roomId || author.roomData || awemeInfo.awemeType === 5),
+            liveRoomId: author.roomIdStr || author.roomId || null,
+            source: 'fiber-awemeInfo'
+        };
+    }
+
+    // 从容器/锚点获取当前卡片作者信息（Fiber awemeInfo 优先，不依赖 DOM 结构）
+    function getAuthorInfoFromFiber(startEl) {
+        if (!startEl) return null;
+
+        // 期望的 aweme_id：优先从 DOM 的 data-e2e-aweme-id 或链接的 aweme_id= 参数获取，用于交叉校验
+        let expectedAwemeId = null;
+        try {
+            const scope = (startEl.querySelector && startEl.querySelector('[data-e2e-aweme-id]')) || startEl;
+            const aidAttr = scope.getAttribute && scope.getAttribute('data-e2e-aweme-id');
+            if (aidAttr) {
+                expectedAwemeId = aidAttr;
+            } else {
+                const link = startEl.querySelector ? startEl.querySelector('a[href*="aweme_id="]') : null;
+                if (link) {
+                    const m = (link.getAttribute('href') || '').match(/aweme_id=(\d+)/);
+                    if (m) expectedAwemeId = m[1];
+                }
+            }
+        } catch (e) {}
+
+        // 候选起点：容器自身 + 向上若干层 + 容器内常见锚点
+        const candidates = [];
+        let el = startEl;
+        for (let i = 0; i < 6 && el; i++) {
+            candidates.push(el);
+            el = el.parentElement;
+        }
+        if (startEl.querySelector) {
+            const anchor = startEl.querySelector('[data-e2e-aweme-id], [data-e2e="video-info"], [data-e2e="detail-video-info"], [data-e2e="feed-item"], [data-e2e="video-detail"]');
+            if (anchor && !candidates.includes(anchor)) candidates.push(anchor);
+        }
+
+        for (const cand of candidates) {
+            const awemeInfo = findAwemeInfoInFiber(cand, expectedAwemeId);
+            if (awemeInfo) {
+                const info = getAuthorInfoFromAwemeInfo(awemeInfo);
+                if (info && info.secUid) {
+                    console.log('[抖音一键拉黑] 从Fiber awemeInfo获取到作者信息:', info);
+                    return info;
+                }
+            }
+        }
+        return null;
+    }
+
     // 从按钮所在容器获取视频作者信息 - 增强版（360浏览器兼容性优化）
     function getVideoAuthorInfoFromContainer(container) {
         console.log('[抖音一键拉黑] 开始从容器获取视频作者信息...');
+
+        // 新方案：优先从页面内存数据（React Fiber awemeInfo）获取，不依赖头像URL/DOM结构
+        // 普通卡片与直播卡片统一在此取 secUid（直播卡片 authorInfo 直接含 secUid）
+        try {
+            const fiberInfo = getAuthorInfoFromFiber(container);
+            if (fiberInfo && fiberInfo.secUid) {
+                console.log('[抖音一键拉黑] 通过Fiber awemeInfo获取到作者信息:', fiberInfo);
+                return fiberInfo;
+            }
+        } catch (e) {
+            console.warn('[抖音一键拉黑] Fiber获取作者信息失败，走DOM兜底:', e);
+        }
 
         // 检测是否是直播卡片
         const liveRoomId = container.getAttribute('data-live-room-id');
@@ -1218,6 +1324,22 @@
     // 从视频详情页面获取作者信息
     function getAuthorInfoFromVideoDetailPage() {
         const win = unsafeWindow || window;
+
+        // 新方案：优先从页面内存数据（React Fiber awemeInfo）获取当前视频作者。
+        // 详情页 [data-e2e="detail-video-info"] 带 data-e2e-aweme-id（当前视频ID），
+        // 通过 Fiber 定位到当前视频的 awemeInfo，避免 querySelector 取到推荐视频作者
+        try {
+            const detailAnchor = document.querySelector('[data-e2e="detail-video-info"], [data-e2e="video-detail"], [data-e2e="player-container"]');
+            if (detailAnchor) {
+                const fiberInfo = getAuthorInfoFromFiber(detailAnchor);
+                if (fiberInfo && fiberInfo.secUid) {
+                    console.log('[抖音一键拉黑] 详情页通过Fiber awemeInfo获取到作者信息:', fiberInfo);
+                    return fiberInfo;
+                }
+            }
+        } catch (e) {
+            console.warn('[抖音一键拉黑] 详情页Fiber获取作者信息失败，走DOM兜底:', e);
+        }
 
         if (win.__SSR_DATA__ && win.__SSR_DATA__.user) {
             const user = win.__SSR_DATA__.user;
@@ -2469,22 +2591,24 @@
             let secUid = null;
             const liveRoomId = btn.getAttribute('data-live-room-id');
 
-            // 如果是直播卡片，先通过直播间API获取用户sec_uid
-            if (liveRoomId) {
-                console.log('[抖音一键拉黑] 直播卡片，正在获取用户信息...');
+            // 新方案：统一优先从页面内存数据（React Fiber awemeInfo）获取。
+            // 普通卡片与直播卡片都直接取 authorInfo.secUid，不依赖头像URL解析，也不依赖直播间API转换
+            try {
+                const authorInfo = getVideoAuthorInfoFromContainer(container);
+                if (authorInfo && authorInfo.secUid) {
+                    secUid = authorInfo.secUid;
+                    console.log('[抖音一键拉黑] 从Fiber awemeInfo获取到secUid:', secUid);
+                }
+            } catch (e) {}
+
+            // 兜底1：直播卡片 Fiber 未命中时，再走直播间API获取用户sec_uid
+            if (!secUid && liveRoomId) {
+                console.log('[抖音一键拉黑] 直播卡片Fiber未命中，改用直播间API...');
                 showToast('正在获取直播用户信息...');
                 const liveUserInfo = await fetchUserInfoFromLiveRoom(liveRoomId);
                 if (liveUserInfo && liveUserInfo.secUid) {
                     secUid = liveUserInfo.secUid;
-                    console.log('[抖音一键拉黑] 直播卡片获取到secUid:', secUid);
-                }
-            }
-
-            // 如果不是直播卡片或直播API未能获取，尝试从容器获取
-            if (!secUid) {
-                const authorInfo = getVideoAuthorInfoFromContainer(container);
-                if (authorInfo && authorInfo.secUid) {
-                    secUid = authorInfo.secUid;
+                    console.log('[抖音一键拉黑] 直播卡片API获取到secUid:', secUid);
                 }
             }
 
@@ -3596,10 +3720,11 @@
         }
     }
 
-    // 处理一条评论的关键词命中（命中后顺手拉黑该用户）
+    // 处理一条评论的关键词命中（命中后按“命中后隐藏/关键词自动拉黑”开关分别处理）
     async function handleCommentBlockWord(commentItem) {
         if (!commentItem || commentItem.dataset.dyBlockWordHandled === '1') return;
-        if (!blockWordEnabled) return;
+        // 隐藏与拉黑都关闭时无需处理
+        if (!blockWordEnabled && !hideCommentsOnBlockWord) return;
         if (!blockWords || blockWords.length === 0) return;
 
         const text = extractCommentText(commentItem);
@@ -3609,7 +3734,8 @@
         applyBlockWordToComment(commentItem, matched);
         commentItem.dataset.dyBlockWordHandled = '1';
 
-        // 命中 → 拉黑用户（不弹 toast 避免刷屏）
+        // 仅当“关键词自动拉黑”开启时才拉黑用户（不弹 toast 避免刷屏）
+        if (!blockWordEnabled) return;
         const info = getCommentAuthorInfo(commentItem);
         if (info && info.secUid) {
             const processedKey = 'kw:' + info.secUid;
@@ -3629,17 +3755,18 @@
 
     // 批量处理当前所有评论的关键词
     function processAllCommentsForBlockWord() {
-        if (!blockWordEnabled) return;
+        if (!blockWordEnabled && !hideCommentsOnBlockWord) return;
         if (!blockWords || blockWords.length === 0) return;
         const items = document.querySelectorAll('[data-e2e="comment-item"]');
         items.forEach(handleCommentBlockWord);
     }
 
-    // 处理一条弹幕的关键词命中（命中后顺手拉黑该用户）
+    // 处理一条弹幕的关键词命中（按“命中后隐藏/关键词自动拉黑”开关分别处理）
     // 弹幕与评论结构差异大：弹幕是数字 userId，评论是 sec_uid，所以独立实现
     async function handleDanmuBlockWord(danmuEl) {
         if (!danmuEl || danmuEl.dataset.dyBlockWordHandled === '1') return;
-        if (!blockWordEnabled) return;
+        // 隐藏与拉黑都关闭时无需处理
+        if (!blockWordEnabled && !hideCommentsOnBlockWord) return;
         if (!blockWords || blockWords.length === 0) return;
         if (!isValidDanmuElement(danmuEl)) return;
 
@@ -3655,7 +3782,7 @@
         danmuEl.dataset.dyBlockWord = matched;
         danmuEl.dataset.dyBlockWordApplied = '1';
 
-        // 视觉：隐藏或加虚框
+        // 视觉：开启“命中后隐藏”则隐藏，否则加虚框标记
         if (hideCommentsOnBlockWord) {
             // 多重隐藏样式确保弹幕被完全隐藏
             danmuEl.style.setProperty('display', 'none', 'important');
@@ -3666,7 +3793,8 @@
             danmuEl.style.setProperty('outline', '1px dashed #555', 'important');
         }
 
-        // 异步拉黑（弹幕是数字 userId，先转 sec_uid）
+        // 仅当“关键词自动拉黑”开启时才拉黑（弹幕是数字 userId，先转 sec_uid）
+        if (!blockWordEnabled) return;
         if (!info.userId) return;
         try {
             const sec = await resolveDanmuUserToSecUid(info.userId);
@@ -3696,17 +3824,18 @@
 
     // 批量处理弹幕的关键词（在按钮已插入后调用）
     function processAllDanmuForBlockWord() {
-        if (!blockWordEnabled) return;
+        if (!blockWordEnabled && !hideCommentsOnBlockWord) return;
         if (!blockWords || blockWords.length === 0) return;
         // 不依赖自动生成的 class，仅用稳定的数据属性定位弹幕元素
         const items = document.querySelectorAll('[data-danmu-id], [data-danmaku-user-id]');
         items.forEach(handleDanmuBlockWord);
     }
 
-    // 处理弹幕关键词命中（不隐藏弹幕版本）
+    // 处理弹幕关键词命中（不隐藏弹幕版本：只加虚框，拉黑与否取决于“关键词自动拉黑”）
     async function handleDanmuBlockWordNoHide(danmuEl) {
         if (!danmuEl || danmuEl.dataset.dyBlockWordHandled === '1') return;
-        if (!blockWordEnabled) return;
+        // 隐藏与拉黑都关闭时无需处理
+        if (!blockWordEnabled && !hideCommentsOnBlockWord) return;
         if (!blockWords || blockWords.length === 0) return;
         if (!isValidDanmuElement(danmuEl)) return;
 
@@ -3725,7 +3854,8 @@
         // 只加虚框，不隐藏
         danmuEl.style.setProperty('outline', '1px dashed #555', 'important');
 
-        // 异步拉黑（弹幕是数字 userId，先转 sec_uid）
+        // 仅当“关键词自动拉黑”开启时才拉黑（弹幕是数字 userId，先转 sec_uid）
+        if (!blockWordEnabled) return;
         if (!info.userId) return;
         try {
             const sec = await resolveDanmuUserToSecUid(info.userId);
@@ -3749,6 +3879,65 @@
                 }
             }
         } catch (e) {}
+    }
+
+    // 扫描弹幕数据列表（danmakuUserMap）中的屏蔽词：
+    // 处理已加载在弹幕数据中、但 DOM 元素已滚走/未渲染的弹幕，命中后同样隐藏/拉黑。
+    // 这样即使弹幕已经滚动离开屏幕，添加屏蔽词后仍能触发屏蔽。
+    async function processDanmakuDataListForBlockWord() {
+        // 隐藏与拉黑都关闭时无需处理
+        if (!blockWordEnabled && !hideCommentsOnBlockWord) return;
+        if (!blockWords || blockWords.length === 0) return;
+        if (danmakuUserMap.size === 0) return;
+
+        let matchedCount = 0;
+        for (const [danmuId, info] of danmakuUserMap) {
+            // 该条弹幕数据已被处理过（命中屏蔽词），避免重复拉黑
+            if (info._kwProcessed) continue;
+            const text = info.text || '';
+            if (!text) continue;
+            const matched = commentTextMatchesBlockWord(text, blockWords);
+            if (!matched) continue;
+
+            info._kwProcessed = true;
+            matchedCount++;
+
+            // 1) 若弹幕 DOM 元素还在页面上，走 DOM 处理（隐藏/虚框 + 可选拉黑）
+            let domEl = null;
+            if (danmuId) domEl = document.querySelector('[data-danmu-id="' + String(danmuId).replace(/["\\]/g, '\\$&') + '"]');
+            if (!domEl && info.userId) domEl = document.querySelector('[data-danmaku-user-id="' + String(info.userId).replace(/["\\]/g, '\\$&') + '"]');
+
+            if (domEl) {
+                if (hideCommentsOnBlockWord) {
+                    handleDanmuBlockWord(domEl);
+                } else {
+                    handleDanmuBlockWordNoHide(domEl);
+                }
+                continue;
+            }
+
+            // 2) DOM 已不存在，无可隐藏内容，仅当“关键词自动拉黑”开启时才从数据列表拉黑该用户
+            if (!blockWordEnabled) continue;
+            if (!info.userId) continue;
+            try {
+                const sec = info.secUid || await resolveDanmuUserToSecUid(info.userId);
+                if (!sec) continue;
+                const processedKey = 'danmu-kw:' + sec;
+                if (batchBlockState.processedUids.has(processedKey)) continue;
+                batchBlockState.processedUids.add(processedKey);
+                const result = await blockUser(sec, false, true);
+                if (result && result.success) {
+                    recordBlockedUser(enrichAuthorInfo({
+                        secUid: sec,
+                        nickname: info.nickname || ('uid_' + info.userId)
+                    }), '弹幕:' + matched);
+                }
+            } catch (e) {}
+        }
+
+        if (matchedCount > 0) {
+            console.log('[抖音一键拉黑] 弹幕数据列表屏蔽词命中:', matchedCount, '条');
+        }
     }
 
     // 验证元素是否是有效的评论元素（包含用户信息）
@@ -4073,8 +4262,8 @@
 
     // 处理页面所有可见弹幕
     function processAllDanmu() {
-        // 检查是否需要处理弹幕（拉黑按钮或右键跳转至少有一个开启）
-        const needProcessDanmu = enableDanmuBlock || enableDanmuRightClick;
+        // 检查是否需要处理弹幕（拉黑按钮、右键跳转、屏蔽词任一开启即处理）
+        const needProcessDanmu = enableDanmuBlock || enableDanmuRightClick || ((blockWordEnabled || hideCommentsOnBlockWord) && blockWords && blockWords.length > 0);
         if (!needProcessDanmu) return;
 
         // 不依赖自动生成的 class（如 jnuqoLJD/wkm0V7Bd 等），仅用稳定的数据属性定位弹幕元素
@@ -4118,6 +4307,23 @@
                 }, true); // 使用捕获阶段
             }
 
+            // ===== 屏蔽词检测：独立于弹幕拉黑按钮/右键开关，始终生效 =====
+            // “命中后隐藏”或“关键词自动拉黑”任一开启即检测
+            if ((blockWordEnabled || hideCommentsOnBlockWord) && blockWords && blockWords.length > 0 && !el.dataset.dyBlockWordHandled) {
+                const bwInfo = getDanmuAuthorInfo(el);
+                if (bwInfo.text && commentTextMatchesBlockWord(bwInfo.text, blockWords)) {
+                    if (hideCommentsOnBlockWord) {
+                        // handleDanmuBlockWord 内部会：标记已处理 + 完全隐藏 + （按开关）异步拉黑
+                        handleDanmuBlockWord(el);
+                        processedCount++;
+                        return; // 已隐藏，不插入按钮
+                    } else {
+                        // 不隐藏版本：加虚框 + （按开关）异步拉黑
+                        handleDanmuBlockWordNoHide(el);
+                    }
+                }
+            }
+
             // 如果弹幕拉黑按钮功能关闭，跳过按钮插入逻辑
             if (!enableDanmuBlock) return;
 
@@ -4126,28 +4332,6 @@
             if (existingBtn) {
                 skippedCount++;
                 return;
-            }
-
-            // 先检查屏蔽词，如果命中且需要隐藏，则直接隐藏并不插入按钮
-            if (blockWordEnabled && blockWords && blockWords.length > 0 && hideCommentsOnBlockWord) {
-                const info = getDanmuAuthorInfo(el);
-                if (info.text && !el.dataset.dyBlockWordHandled) {
-                    const matched = commentTextMatchesBlockWord(info.text, blockWords);
-                    if (matched) {
-                        // 标记为已处理
-                        el.dataset.dyBlockWordHandled = '1';
-                        el.dataset.dyBlockWord = matched;
-                        el.dataset.dyBlockWordApplied = '1';
-                        // 直接隐藏弹幕元素
-                        el.style.setProperty('display', 'none', 'important');
-                        el.style.setProperty('visibility', 'hidden', 'important');
-                        el.style.setProperty('opacity', '0', 'important');
-                        // 异步拉黑该用户
-                        handleDanmuBlockWord(el);
-                        processedCount++;
-                        return; // 隐藏后不插入按钮
-                    }
-                }
             }
 
             const info = getDanmuAuthorInfo(el);
@@ -4165,14 +4349,6 @@
 
         if (processedCount > 0 || skippedCount > 0) {
             console.log(`[抖音一键拉黑] 处理弹幕: ${processedCount} 个已处理, ${skippedCount} 个已跳过, 总计 ${items.length} 个`);
-        }
-
-        // 按钮插完后再走关键词检测（处理不需要隐藏的情况）
-        // 注意：手动拉黑后不需要隐藏弹幕，所以使用 handleDanmuBlockWordNoHide
-        if (blockWordEnabled && !hideCommentsOnBlockWord) {
-            // 不依赖自动生成的 class，仅用稳定的数据属性定位弹幕元素
-            const items = document.querySelectorAll('[data-danmu-id], [data-danmaku-user-id]');
-            items.forEach(handleDanmuBlockWordNoHide);
         }
     }
 
@@ -4772,7 +4948,7 @@
 
     // 主初始化函数 - 增强版
     function init() {
-        console.log('[抖音拉黑] 初始化 v5.9 (关键词拉黑 + 拉黑日志版)');
+        console.log('[抖音拉黑] 初始化 v6.0 (关键词拉黑 + 拉黑日志版)');
 
         // 检查用户是否同意免责协议
         if (!userAgreedDisclaimer && !checkDisclaimerAgreed()) {
@@ -4806,10 +4982,12 @@
 
         // 启动弹幕按钮扫描
         processAllDanmu();
+        processDanmakuDataListForBlockWord();
 
         // 定时扫描弹幕（弹幕是动态滚动的，需要频繁检查）
         setInterval(() => {
             processAllDanmu();
+            processDanmakuDataListForBlockWord();
         }, 500);
 
         // 页面可见性变化时的处理
@@ -4993,6 +5171,30 @@
     function getCurrentVideoAuthorSecUid() {
         const win = unsafeWindow || window;
         const candidates = [
+            () => {
+                // 新方案：优先从页面内存数据（React Fiber awemeInfo）获取当前视频作者。
+                // 详情页取 [data-e2e="detail-video-info"]；推荐流取视口内可见的卡片锚点。
+                // 通过 data-e2e-aweme-id 交叉校验，避免取到其它视频/卡片的数据
+                try {
+                    const anchors = document.querySelectorAll('[data-e2e="detail-video-info"], [data-e2e="video-detail"], [data-e2e="feed-item"], [data-e2e="video-info"]');
+                    // 先找视口内可见的锚点
+                    for (const el of anchors) {
+                        const rect = el.getBoundingClientRect();
+                        if (rect.bottom < -50 || rect.top > window.innerHeight + 50) continue;
+                        const info = getAuthorInfoFromFiber(el);
+                        if (info && info.secUid) {
+                            console.log('[抖音一键拉黑] getCurrentVideoAuthorSecUid 通过Fiber awemeInfo获取到:', info);
+                            return info.secUid;
+                        }
+                    }
+                    // 兜底：取第一个带 aweme-id 的锚点（详情页通常只有1条）
+                    if (anchors.length > 0) {
+                        const info = getAuthorInfoFromFiber(anchors[0]);
+                        if (info && info.secUid) return info.secUid;
+                    }
+                } catch (e) {}
+                return null;
+            },
             () => win.__INITIAL_STATE__?.user?.sec_uid,
             () => win.__INITIAL_STATE__?.aweme?.author?.sec_uid,
             () => win.__INITIAL_STATE__?.awemeItem?.author?.sec_uid,
@@ -6392,7 +6594,7 @@
                     </div>
                     <textarea id="block-words-input" placeholder="一行一个关键词" style="width:100%;min-height:90px;max-height:160px;box-sizing:border-box;background:#2a2a2a;color:#fff;border:1px solid #333;border-radius:6px;padding:8px;font-size:13px;line-height:1.5;resize:vertical;font-family:inherit;">${blockWords.map(w => escapeHtml(w)).join('\n')}</textarea>
                     <div class="douyin-block-settings-row" style="margin-top: 8px;">
-                        <span class="douyin-block-settings-label" style="flex: 1;">命中后隐藏该评论/弹幕<br><span style="font-size: 11px; color: #888;">（关闭后只标记不隐藏）</span></span>
+                        <span class="douyin-block-settings-label" style="flex: 1;">命中后隐藏该评论/弹幕<br><span style="font-size: 11px; color: #888;">（开启即隐藏命中内容；未开启“关键词自动拉黑”时只隐藏不拉黑）</span></span>
                         <label class="douyin-block-settings-switch">
                             <input type="checkbox" id="word-hide-toggle" ${hideCommentsOnBlockWord ? 'checked' : ''}>
                             <span class="douyin-block-settings-slider" id="word-hide-slider"></span>
@@ -6412,10 +6614,9 @@
                         点击输入框后按组合键设置<br>
                         支持: Ctrl+Q, Alt+Q, Ctrl+Alt+Q, Shift+F4 等<br>
                         右键点击拉黑按钮可打开设置<br>
-                        按 ESC 关闭设置<br><br>
+                        按 ESC 或点击空白处关闭，修改自动保存<br><br>
                         <b style="color:#ccc;">长按快捷键可批量拉黑评论区所有用户，松开后收尾</b>
                     </div>
-                    <button id="douyin-block-settings-save-btn" class="douyin-block-settings-save">保存</button>
                 </div>
 
                 <!-- 关于标签页 -->
@@ -6436,7 +6637,7 @@
                             <div class="douyin-about-info-icon">📦</div>
                             <div class="douyin-about-info-content">
                                 <div class="douyin-about-info-label">插件名称</div>
-                                <div class="douyin-about-info-value">抖音一键拉黑 <span class="douyin-about-version-badge">v5.9</span></div>
+                                <div class="douyin-about-info-value">抖音一键拉黑 <span class="douyin-about-version-badge">v6.0</span></div>
                             </div>
                         </div>
                         <div class="douyin-about-info-item">
@@ -6520,7 +6721,6 @@
 
         const input = overlay.querySelector('#block-shortcut-input');
         const closeBtn = overlay.querySelector('.douyin-block-settings-close');
-        const saveBtn = overlay.querySelector('#douyin-block-settings-save-btn');
         const commentToggle = overlay.querySelector('#comment-shortcut-toggle');
         const longpressInput = overlay.querySelector('#longpress-input');
         const concurrencyInput = overlay.querySelector('#concurrency-input');
@@ -6537,11 +6737,6 @@
         const enableRecommendToggle = overlay.querySelector('#enable-recommend-block');
         const enableVideoDetailToggle = overlay.querySelector('#enable-video-detail-block');
 
-        if (!saveBtn) {
-            console.error('[抖音一键拉黑] 未找到保存按钮，初始化失败');
-            return;
-        }
-
         // 临时存储当前设置
         let tempKey = blockShortcutKey;
         let tempModifiers = { ...blockShortcutModifiers };
@@ -6551,7 +6746,7 @@
         let tempAuthorBlock = blockVideoAuthorAfterBatch;
         let tempWordEnabled = blockWordEnabled;
         let tempWordsText = wordsInput.value;
-        let tempHideOnWord = hideCommentsOnBlockWord;
+        let tempHideOnWord = hideCommentsOnBlockWord; // 独立于“关键词自动拉黑”
         let tempLogEnabled = logBlockedEnabled;
         // 场景开关临时变量
         let tempEnableDanmu = enableDanmuBlock;
@@ -6579,7 +6774,7 @@
             tempWordEnabled = e.target.checked;
         });
 
-        // 命中后隐藏开关
+        // 命中后隐藏开关（独立于“关键词自动拉黑”：只控制是否隐藏，不控制是否拉黑）
         wordHideToggle.addEventListener('change', (e) => {
             tempHideOnWord = e.target.checked;
         });
@@ -6653,30 +6848,19 @@
         // 打开拉黑记录页
         openLogBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            overlay.remove();
+            closeSettingsAndSave();
             openBlockLogPage();
         });
 
-        closeBtn.addEventListener('click', () => overlay.remove());
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) overlay.remove();
-        });
-
-        saveBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('[抖音一键拉黑] 保存按钮被点击');
-
-            if (!tempKey) {
-                showToast('请按组合键设置快捷键');
-                return;
-            }
-            // 校验
+        // 应用并保存当前临时设置（关闭设置面板时自动保存）
+        function applyAndSaveSettings() {
+            // 快捷键为空时保留原快捷键，避免关闭被阻塞
+            const finalKey = tempKey || blockShortcutKey;
             const finalLongPress = Math.max(500, Math.min(60000, tempLongPressMs || 5000));
             const finalConcurrency = Math.max(1, Math.min(50, tempConcurrency || 10));
 
             try {
-                blockShortcutKey = tempKey;
+                blockShortcutKey = finalKey;
                 blockShortcutModifiers = { ...tempModifiers };
                 commentShortcutEnabled = !!tempCommentEnabled;
                 batchLongPressMs = finalLongPress;
@@ -6713,28 +6897,34 @@
                 localStorage.setItem(STORAGE_ENABLE_DANMU_RIGHT_CLICK, String(enableDanmuRightClick));
 
                 showToast('设置已保存');
-                overlay.remove();
-                // 保存后立即对新评论生效
+                // 保存后立即对新评论/已加载弹幕生效
                 processAllCommentsForBlockWord();
+                processAllDanmu();
+                processDanmakuDataListForBlockWord();
+                return true;
             } catch (err) {
                 console.error('[抖音一键拉黑] 保存设置失败:', err);
                 showToast('保存失败：' + (err && err.message ? err.message : '未知错误'));
+                return false;
             }
+        }
+
+        // 关闭设置面板并自动保存
+        function closeSettingsAndSave() {
+            applyAndSaveSettings();
+            overlay.remove();
+        }
+
+        closeBtn.addEventListener('click', () => closeSettingsAndSave());
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeSettingsAndSave();
         });
 
-        // 让保存按钮也能响应 Enter（避免被快捷键 input 抢走）
-        saveBtn.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                saveBtn.click();
-            }
-        });
-
-        // 面板整体键盘：Tab 焦点循环、Enter 默认提交
+        // 面板整体键盘：Tab 焦点循环、Enter 关闭并自动保存
         overlay.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA' && e.target !== input) {
                 e.preventDefault();
-                saveBtn.click();
+                closeSettingsAndSave();
             }
         });
 
@@ -6744,11 +6934,11 @@
 
             if (e.key === 'Enter') {
                 e.preventDefault();
-                saveBtn.click();
+                closeSettingsAndSave();
                 return;
             }
             if (e.key === 'Escape') {
-                overlay.remove();
+                closeSettingsAndSave();
                 return;
             }
 
@@ -7021,7 +7211,7 @@
         setTimeout(startInitialization, 1000);
     }
 
-    console.log('[抖音一键拉黑] v5.9 关键词拉黑 + 拉黑日志版脚本加载完成');
+    console.log('[抖音一键拉黑] v6.0 关键词拉黑 + 拉黑日志版脚本加载完成');
     console.log('[抖音一键拉黑] 当前快捷键: ' + getShortcutDisplayName());
     console.log('[抖音一键拉黑] 长按 >5秒 可批量拉黑评论区所有用户');
     console.log('[抖音一键拉黑] 右键点击拉黑按钮可打开设置面板');
